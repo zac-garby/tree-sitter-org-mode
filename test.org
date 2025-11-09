@@ -1,0 +1,21 @@
+The initial one
+
+* Heading
+:properties:
+:foo:
+:bar:
+:end:
+
+#+begin_src hs
+some haskell code
+#+end_src
+
+:testdrawer:
+just a normal one
+:end:
+
+** Another heading
+
+- my list
+  - is here
+  - how cool?

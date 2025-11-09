@@ -1,0 +1,40 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "orgmode",
+      "camelcase": "OrgMode",
+      "title": "org mode",
+      "scope": "source.org",
+      "file-types": [
+        "org"
+      ],
+      "injection-regex": "^orgmode$",
+      "class-name": "TreeSitterOrgmode"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Emacs org-mode files",
+    "authors": [
+      {
+        "name": "Zac Garby",
+        "email": "me@zacgarby.co.uk",
+        "url": "https://zacgarby.co.uk/"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/zac-garby/tree-sitter-org-mode"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "go": true,
+    "node": true,
+    "python": true,
+    "rust": true,
+    "swift": true,
+    "zig": false
+  }
+}
