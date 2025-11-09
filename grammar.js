@@ -21,6 +21,7 @@ export default grammar({
     $.block_end_name,
     $.drawer_name,
     $.drawer_end,
+    $.property_name,
     $.stars,
     $._end_section,
     $.bullet,
@@ -45,6 +46,7 @@ export default grammar({
       $.greater_block,
       $.dynamic_block,
       $.drawer,
+      $.node_property,
       $.list,
       $.object,
       $._blank_line,
@@ -77,34 +79,13 @@ export default grammar({
       repeat1($._blank_line),
     )),
 
-    // property_drawer: $ => prec(1, seq(
-    //   $.property_drawer_name,
-    //   alias($._blank_line, "nl"),
-    //   alias(repeat(choice(
-    //     $.property_node,
-    //     alias($._blank_line, "nl 1"),
-    //   )), "nodes"),
-    //   // optional(alias($.property_node, "last one")),
-    //   // alias($._nl, "blank 2"),
-    //   // alias(repeat(seq($.property_node, $._blank_line)), "nodes"),
-    //   // alias(optional($.property_node), "last"),
-    //   // $._blank_line,
-    //   // alias($._nl, "nl 2"),
-    //   $.drawer_end,
-    // )),
-
-    // property_node: $ => prec.right(0, seq(
-    //   $.drawer_name,
-    //   optional(seq($._space, $.value)),
-    // )),
-
     value: $ => /[^\n]+/,
 
     greater_block: $ => seq(
       $._block_begin_marker,
       $.block_begin_name,
       optional(seq(
-        $._space, alias(/[^\n]+/, "params")
+        $._space, field("params", $.value)
       )),
       $._blank_line,
       optional(seq(
@@ -119,10 +100,10 @@ export default grammar({
       "#+begin:",
       $.block_begin_name,
       optional(seq(
-        $._space, alias(/[^\n]+/, "params")
+        $._space, field("params", $.value)
       )),
       $._blank_line,
-      repeat($.element),
+      field("contents", alias(repeat($.element), "contents")),
       $._blank_line,
       "#+end:",
       $.block_end_name,
@@ -131,9 +112,16 @@ export default grammar({
     drawer: $ => seq(
       $.drawer_name,
       $._blank_line,
-      repeat($.element),
+      field("contents", alias(repeat($.element), "contents")),
       $.drawer_end,
     ),
+
+    node_property: $ => prec(1, seq(
+      field("name", $.property_name),
+      optional(seq(
+        $._space, field("value", $.value),
+      ))
+    )),
 
     list: $ => prec.left(0, seq(
       $._list_start,
@@ -144,7 +132,7 @@ export default grammar({
     list_item: $ => prec.left(1, seq(
       $.bullet,
       optional(choice("[ ]", "[-]", "[X]")),
-      repeat($.element),
+      field("content", alias(repeat($.element), "content")),
     )),
 
     object: $ => prec(-1, choice(

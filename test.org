@@ -2,9 +2,11 @@ The initial one
 
 * Heading
 :properties:
-:foo:
-:bar:
+:foo: zac garby
+:bar+:
 :end:
+
+-----
 
 #+begin_src hs
 some haskell code

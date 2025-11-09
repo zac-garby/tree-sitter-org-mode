@@ -43,6 +43,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "node_property"
+        },
+        {
+          "type": "SYMBOL",
           "name": "list"
         },
         {
@@ -249,13 +253,12 @@
                   "name": "_space"
                 },
                 {
-                  "type": "ALIAS",
+                  "type": "FIELD",
+                  "name": "params",
                   "content": {
-                    "type": "PATTERN",
-                    "value": "[^\\n]+"
-                  },
-                  "named": false,
-                  "value": "params"
+                    "type": "SYMBOL",
+                    "name": "value"
+                  }
                 }
               ]
             },
@@ -333,13 +336,12 @@
                   "name": "_space"
                 },
                 {
-                  "type": "ALIAS",
+                  "type": "FIELD",
+                  "name": "params",
                   "content": {
-                    "type": "PATTERN",
-                    "value": "[^\\n]+"
-                  },
-                  "named": false,
-                  "value": "params"
+                    "type": "SYMBOL",
+                    "name": "value"
+                  }
                 }
               ]
             },
@@ -353,10 +355,19 @@
           "name": "_blank_line"
         },
         {
-          "type": "REPEAT",
+          "type": "FIELD",
+          "name": "contents",
           "content": {
-            "type": "SYMBOL",
-            "name": "element"
+            "type": "ALIAS",
+            "content": {
+              "type": "REPEAT",
+              "content": {
+                "type": "SYMBOL",
+                "name": "element"
+              }
+            },
+            "named": false,
+            "value": "contents"
           }
         },
         {
@@ -385,10 +396,19 @@
           "name": "_blank_line"
         },
         {
-          "type": "REPEAT",
+          "type": "FIELD",
+          "name": "contents",
           "content": {
-            "type": "SYMBOL",
-            "name": "element"
+            "type": "ALIAS",
+            "content": {
+              "type": "REPEAT",
+              "content": {
+                "type": "SYMBOL",
+                "name": "element"
+              }
+            },
+            "named": false,
+            "value": "contents"
           }
         },
         {
@@ -396,6 +416,48 @@
           "name": "drawer_end"
         }
       ]
+    },
+    "node_property": {
+      "type": "PREC",
+      "value": 1,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "name",
+            "content": {
+              "type": "SYMBOL",
+              "name": "property_name"
+            }
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SEQ",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "_space"
+                  },
+                  {
+                    "type": "FIELD",
+                    "name": "value",
+                    "content": {
+                      "type": "SYMBOL",
+                      "name": "value"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          }
+        ]
+      }
     },
     "list": {
       "type": "PREC_LEFT",
@@ -457,10 +519,19 @@
             ]
           },
           {
-            "type": "REPEAT",
+            "type": "FIELD",
+            "name": "content",
             "content": {
-              "type": "SYMBOL",
-              "name": "element"
+              "type": "ALIAS",
+              "content": {
+                "type": "REPEAT",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "element"
+                }
+              },
+              "named": false,
+              "value": "content"
             }
           }
         ]
@@ -532,6 +603,10 @@
     {
       "type": "SYMBOL",
       "name": "drawer_end"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "property_name"
     },
     {
       "type": "SYMBOL",

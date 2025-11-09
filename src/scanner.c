@@ -38,6 +38,7 @@
     TOK(BLOCK_END_NAME) \
     TOK(DRAWER_NAME) \
     TOK(DRAWER_END) \
+    TOK(PROPERTY_NAME) \
     TOK(STARS) \
     TOK(END_SECTION) \
     TOK(BULLET) \
@@ -63,6 +64,7 @@ typedef enum {
     PLUS = '+',
     COUNTER_DOT = '.',
     COUNTER_PAREN = ')',
+    NO_BULLET = 'X',
 } Bullet;
 
 #define ARRAY_STR(name) ARRAY(name, const char *)
@@ -98,39 +100,62 @@ static const char *scan_while(TSLexer *lexer, bool (*pred)(char)) {
     return name;
 }
 
-static Bullet scan_bullet(TSLexer *lexer) {
-    if (lexer->lookahead == '-') {
-        lexer->advance(lexer, false);
-        return HYPHEN;
-    } else if (lexer->lookahead == '*' && lexer->get_column(lexer) > 0) {
-        lexer->advance(lexer, false);
-        return STAR;
-    } else if (lexer->lookahead == '+') {
-        lexer->advance(lexer, false);
-        return PLUS;
-    } else if (iswalnum(lexer->lookahead)) {
-        while (iswdigit(lexer->lookahead)) {
-            lexer->advance(lexer, false);
-        }
+static unsigned skip_while(TSLexer *lexer, bool (*pred)(char), bool ws) {
+    if (!pred(lexer->lookahead)) return 0;
 
-        if (lexer->lookahead == '.') {
-            lexer->advance(lexer, false);
-            return COUNTER_DOT;
-        } else if (lexer->lookahead == ')') {
-            lexer->advance(lexer, false);
-            return COUNTER_PAREN;
-        }
+    unsigned n;
+    for (n = 0; pred(lexer->lookahead); n++) {
+        lexer->advance(lexer, ws);
     }
 
-    return 0;
+    return n;
 }
 
-static bool is_name_char(char c) {
+static inline bool is_name_char(char c) {
     return iswalnum(c) || c == '_' || c == '-';
 }
 
-static inline bool isnotspace(char c) {
-    return !isspace(c);
+static inline bool is_property_name_char(char c) {
+    return is_name_char(c) || c == '+';
+}
+
+static inline bool not_whitespace(char c) {
+    return !iswspace(c);
+}
+
+static inline bool is_whitespace(char c) {
+    return iswspace(c);
+}
+
+static Bullet scan_bullet(TSLexer *lexer) {
+    Bullet kind = NO_BULLET;
+
+    if (lexer->lookahead == '-') {
+        kind = HYPHEN;
+    } else if (lexer->lookahead == '*' && lexer->get_column(lexer) > 0) {
+        kind = STAR;
+    } else if (lexer->lookahead == '+') {
+        kind = PLUS;
+    } else if (iswalnum(lexer->lookahead)) {
+        while (iswdigit(lexer->lookahead)) lexer->advance(lexer, false);
+
+        if (lexer->lookahead == '.') {
+            kind = COUNTER_DOT;
+        } else if (lexer->lookahead == ')') {
+            kind = COUNTER_PAREN;
+        }
+    }
+
+    if (kind == NO_BULLET) return NO_BULLET;
+
+    lexer->advance(lexer, false);
+
+    if (skip_while(lexer, is_whitespace, true) == 0) {
+        // we need at least one space following a bullet
+        return NO_BULLET;
+    }
+
+    return kind;
 }
 
 bool tree_sitter_orgmode_external_scanner_scan(
@@ -139,6 +164,10 @@ bool tree_sitter_orgmode_external_scanner_scan(
     const bool *valid_symbols
 ) {
     Scanner *s = (Scanner*) payload;
+
+    if (valid_symbols[ERROR_SENTINEL]) {
+        return false;
+    }
 
     lexer->mark_end(lexer);
 
@@ -150,9 +179,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
     DrawerType in_drawer = s->drawer_stack.size == 0
         ? NO_DRAWER : *array_back(&s->drawer_stack);
 
-    if (valid_symbols[ERROR_SENTINEL]) {
-        return false;
-    }
+    LOG("indent: %d; in_drawer: %c", indent, in_drawer);
 
     #define TOK(id) if (valid_symbols[id]) { LOG("EXPECTING TOKEN: " #id); }
     TOKEN_TYPES
@@ -168,6 +195,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
     if (valid_symbols[LIST_END] && can_end_list) {
         lexer->result_symbol = LIST_END;
         array_pop(&s->list_indents);
+        LOG("ending list!");
         return true;
     }
 
@@ -176,25 +204,26 @@ bool tree_sitter_orgmode_external_scanner_scan(
 
         Bullet b = scan_bullet(lexer);
 
-        if (b > 0) {
+        if (b != NO_BULLET) {
             LOG("got bullet '%c'", b);
             // got a bullet
             if (valid_symbols[LIST_START] && (indent == 255 || col > indent)) {
                 lexer->result_symbol = LIST_START;
                 array_push(&s->list_indents, col);
+                LOG("pushing list start for bullet: %c", b);
                 return true;
             }
 
             if (valid_symbols[BULLET] && col == indent) {
                 lexer->mark_end(lexer);
                 lexer->result_symbol = BULLET;
+                LOG("returning bullet: %c", b);
                 return true;
             }
         }
     }
 
     if (valid_symbols[STARS] && lexer->get_column(lexer) == 0 && lexer->lookahead == '*') {
-        LOG("*** SCANNING STARS");
         lexer->mark_end(lexer);
 
         unsigned char new_level = 0;
@@ -219,6 +248,66 @@ bool tree_sitter_orgmode_external_scanner_scan(
         return true;
     }
 
+    if (in_drawer == PROPERTY_DRAWER && valid_symbols[PROPERTY_NAME] && lexer->lookahead == ':') {
+        LOG("looking for a property name");
+
+        lexer->advance(lexer, false);
+        const char *name = scan_while(lexer, is_property_name_char);
+        if (name == NULL || lexer->lookahead != ':') return false;
+        lexer->advance(lexer, false);
+
+        LOG("got one: %s", name);
+
+        // a name can't be 'end'
+        if (strcmp(name, "end") == 0) {
+            if (valid_symbols[DRAWER_END]) {
+                lexer->result_symbol = DRAWER_END;
+                array_pop(&s->drawer_stack);
+                lexer->mark_end(lexer);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        ts_free((void*) name);
+        lexer->mark_end(lexer);
+        lexer->result_symbol = PROPERTY_NAME;
+        LOG("returning property name");
+
+        return true;
+    }
+
+    if (in_drawer != PROPERTY_DRAWER && valid_symbols[DRAWER_NAME] && lexer->lookahead == ':') {
+        lexer->advance(lexer, false);
+        const char *name = scan_while(lexer, is_name_char);
+        if (name == NULL || lexer->lookahead != ':') return false;
+
+        lexer->advance(lexer, false);
+
+        // a name can't be 'end'
+        if (strcmp(name, "end") == 0) {
+            if (valid_symbols[DRAWER_END]) {
+                lexer->result_symbol = DRAWER_END;
+                array_pop(&s->drawer_stack);
+                lexer->mark_end(lexer);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        DrawerType drawer_type = strcmp(name, "properties") == 0
+            ? PROPERTY_DRAWER : NORMAL_DRAWER;
+        ts_free((void*) name);
+        array_push(&s->drawer_stack, drawer_type);
+
+        lexer->result_symbol = DRAWER_NAME;
+        lexer->mark_end(lexer);
+
+        return true;
+    }
+
     if (valid_symbols[DRAWER_END]
         && scan_literal(lexer, ":end:")
         && in_drawer != NO_DRAWER)
@@ -226,34 +315,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
         lexer->mark_end(lexer);
         lexer->result_symbol = DRAWER_END;
         array_pop(&s->drawer_stack);
-
-        return true;
-    }
-
-    if (valid_symbols[DRAWER_NAME] && lexer->lookahead == ':') {
-        lexer->advance(lexer, false);
-        const char *name = scan_while(lexer, is_name_char);
-        if (name == NULL || lexer->lookahead != ':') return false;
-
-        lexer->advance(lexer, false);
-        lexer->mark_end(lexer);
-
-        if (strcmp(name, "end") == 0) {
-            if (valid_symbols[DRAWER_END]) {
-                lexer->result_symbol = DRAWER_END;
-                array_pop(&s->drawer_stack);
-                return true;
-            } else {
-                return false;
-            }
-        }
-
-        DrawerType drawer_type =
-            strcmp(name, "properties") == 0 ? PROPERTY_DRAWER : NORMAL_DRAWER;
-        ts_free((void*) name);
-        array_push(&s->drawer_stack, drawer_type);
-
-        lexer->result_symbol = DRAWER_NAME;
+        LOG("returning drawer end");
 
         return true;
     }
@@ -261,7 +323,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
     if (valid_symbols[BLOCK_BEGIN_NAME]) {
         lexer->log(lexer, "looking for a BLOCK_BEGIN_NAME");
 
-        const char *name = scan_while(lexer, isnotspace);
+        const char *name = scan_while(lexer, not_whitespace);
         if (name == NULL) return false;
 
         LOG("got one: '%s'", name);
@@ -277,7 +339,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
     if (valid_symbols[BLOCK_END_NAME]) {
         lexer->log(lexer, "looking for a BLOCK_END_NAME");
 
-        const char *name = scan_while(lexer, isnotspace);
+        const char *name = scan_while(lexer, not_whitespace);
         if (name == NULL) return false;
 
         if (s->block_name_stack.size == 0) {

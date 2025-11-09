@@ -20,6 +20,10 @@
         "named": true
       },
       {
+        "type": "node_property",
+        "named": true
+      },
+      {
         "type": "object",
         "named": true
       }
@@ -28,6 +32,36 @@
   {
     "type": "body",
     "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "content",
+    "named": false,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "contents",
+    "named": false,
     "fields": {},
     "children": {
       "multiple": true,
@@ -63,7 +97,18 @@
   {
     "type": "drawer",
     "named": true,
-    "fields": {},
+    "fields": {
+      "contents": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "contents",
+            "named": false
+          }
+        ]
+      }
+    },
     "children": {
       "multiple": true,
       "required": true,
@@ -75,10 +120,6 @@
         {
           "type": "drawer_name",
           "named": true
-        },
-        {
-          "type": "element",
-          "named": true
         }
       ]
     }
@@ -86,7 +127,28 @@
   {
     "type": "dynamic_block",
     "named": true,
-    "fields": {},
+    "fields": {
+      "contents": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "contents",
+            "named": false
+          }
+        ]
+      },
+      "params": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "value",
+            "named": true
+          }
+        ]
+      }
+    },
     "children": {
       "multiple": true,
       "required": true,
@@ -97,10 +159,6 @@
         },
         {
           "type": "block_end_name",
-          "named": true
-        },
-        {
-          "type": "element",
           "named": true
         }
       ]
@@ -117,6 +175,16 @@
           {
             "type": "body",
             "named": false
+          }
+        ]
+      },
+      "params": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "value",
+            "named": true
           }
         ]
       }
@@ -180,20 +248,53 @@
   {
     "type": "list_item",
     "named": true,
-    "fields": {},
+    "fields": {
+      "content": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "content",
+            "named": false
+          }
+        ]
+      }
+    },
     "children": {
-      "multiple": true,
+      "multiple": false,
       "required": true,
       "types": [
         {
           "type": "bullet",
           "named": true
-        },
-        {
-          "type": "element",
-          "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "node_property",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "property_name",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "value",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -299,11 +400,15 @@
     "named": false
   },
   {
-    "type": "params",
-    "named": false
+    "type": "property_name",
+    "named": true
   },
   {
     "type": "stars",
+    "named": true
+  },
+  {
+    "type": "value",
     "named": true
   }
 ]
