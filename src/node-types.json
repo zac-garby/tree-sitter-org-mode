@@ -45,6 +45,11 @@
     }
   },
   {
+    "type": "checkbox",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "content",
     "named": false,
     "fields": {},
@@ -249,6 +254,16 @@
     "type": "list_item",
     "named": true,
     "fields": {
+      "checkbox": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "checkbox",
+            "named": true
+          }
+        ]
+      },
       "content": {
         "multiple": false,
         "required": false,

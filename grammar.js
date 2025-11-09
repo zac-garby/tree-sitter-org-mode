@@ -52,8 +52,6 @@ export default grammar({
       $._blank_line,
     ),
 
-    paragraph: $ => /[^\n]+/,
-
     body: $ => prec.left(0, seq(
       repeat1($.element)
     )),
@@ -129,13 +127,15 @@ export default grammar({
       $._list_end,
     )),
 
-    list_item: $ => prec.left(1, seq(
+    list_item: $ => prec(1, seq(
       $.bullet,
-      optional(choice("[ ]", "[-]", "[X]")),
+      optional(field("checkbox", $.checkbox)),
       field("content", alias(repeat($.element), "content")),
     )),
 
-    object: $ => prec(-1, choice(
+    checkbox: $ => choice("[ ]", "[-]", "[X]"),
+
+    object: $ => prec(0, choice(
       $._word // placeholder for now, just single words
     )),
 
