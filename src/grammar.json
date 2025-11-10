@@ -51,7 +51,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "object"
+          "name": "paragraph"
         },
         {
           "type": "SYMBOL",
@@ -288,10 +288,6 @@
                     "named": false,
                     "value": "body"
                   }
-                },
-                {
-                  "type": "SYMBOL",
-                  "name": "_blank_line"
                 }
               ]
             },
@@ -541,26 +537,71 @@
         }
       ]
     },
-    "object": {
-      "type": "PREC",
+    "paragraph": {
+      "type": "PREC_RIGHT",
       "value": 0,
       "content": {
-        "type": "CHOICE",
+        "type": "SEQ",
         "members": [
           {
+            "type": "REPEAT1",
+            "content": {
+              "type": "SYMBOL",
+              "name": "object"
+            }
+          },
+          {
             "type": "SYMBOL",
-            "name": "_word"
+            "name": "_nl"
           }
         ]
       }
     },
+    "object": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "word"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "markup"
+        }
+      ]
+    },
+    "markup": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "bold"
+        }
+      ]
+    },
+    "bold": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_bold_start"
+        },
+        {
+          "type": "REPEAT1",
+          "content": {
+            "type": "SYMBOL",
+            "name": "object"
+          }
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_bold_end"
+        }
+      ]
+    },
     "alphanum": {
       "type": "PATTERN",
       "value": "[a-zA-Z0-9_]"
-    },
-    "_word": {
-      "type": "PATTERN",
-      "value": "[^\\s]+"
     },
     "_blank_line": {
       "type": "PATTERN",
@@ -634,12 +675,25 @@
     },
     {
       "type": "SYMBOL",
+      "name": "_bold_start"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_bold_end"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "word"
+    },
+    {
+      "type": "SYMBOL",
       "name": "error_sentinel"
     }
   ],
   "inline": [],
   "supertypes": [
-    "element"
+    "element",
+    "object"
   ],
   "reserved": {}
 }

@@ -24,7 +24,21 @@
         "named": true
       },
       {
-        "type": "object",
+        "type": "paragraph",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "object",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "markup",
+        "named": true
+      },
+      {
+        "type": "word",
         "named": true
       }
     ]
@@ -39,6 +53,21 @@
       "types": [
         {
           "type": "element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "bold",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "object",
           "named": true
         }
       ]
@@ -287,6 +316,21 @@
     }
   },
   {
+    "type": "markup",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "bold",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "node_property",
     "named": true,
     "fields": {
@@ -313,9 +357,19 @@
     }
   },
   {
-    "type": "object",
+    "type": "paragraph",
     "named": true,
-    "fields": {}
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "object",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "section",
@@ -424,6 +478,10 @@
   },
   {
     "type": "value",
+    "named": true
+  },
+  {
+    "type": "word",
     "named": true
   }
 ]

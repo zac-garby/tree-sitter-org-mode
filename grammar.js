@@ -11,7 +11,8 @@ export default grammar({
   name: "orgmode",
 
   supertypes: $ => [
-    $.element
+    $.element,
+    $.object,
   ],
 
   externals: $ => [
@@ -27,6 +28,9 @@ export default grammar({
     $.bullet,
     $._list_start,
     $._list_end,
+    $._bold_start,
+    $._bold_end,
+    $.word,
     $.error_sentinel,
   ],
 
@@ -34,7 +38,7 @@ export default grammar({
     /[ \t]+/
   ],
 
-  // word: $ => $._word,
+  // word: $ => $.word,
 
   rules: {
     document: $ => seq(
@@ -48,7 +52,7 @@ export default grammar({
       $.drawer,
       $.node_property,
       $.list,
-      $.object,
+      $.paragraph,
       $._blank_line,
     ),
 
@@ -88,7 +92,7 @@ export default grammar({
       $._blank_line,
       optional(seq(
         field("body", alias(repeat($.element), "body")),
-        $._blank_line
+        // $._blank_line,
       )),
       $._block_end_marker,
       $.block_end_name,
@@ -135,12 +139,24 @@ export default grammar({
 
     checkbox: $ => choice("[ ]", "[-]", "[X]"),
 
-    object: $ => prec(0, choice(
-      $._word // placeholder for now, just single words
+    paragraph: $ => prec.right(0, seq(
+      repeat1($.object),
+      $._nl,
     )),
 
+    object: $ => choice(
+      $.word,
+      $.markup,
+    ),
+
+    markup: $ => choice(
+      $.bold,
+    ),
+
+    bold: $ => seq($._bold_start, repeat1($.object), $._bold_end),
+
     alphanum: $ => /[a-zA-Z0-9_]/,
-    _word: $ => /[^\s]+/,
+    // word: $ => /[^\s]+/,
     _blank_line: $ => /\r?\n[ \t]*/,
     _nl: $ => /\r?\n/,
     _space: $ => /[ \t]+/

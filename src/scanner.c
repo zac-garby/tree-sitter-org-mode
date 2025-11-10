@@ -29,6 +29,7 @@
     ARRAY(section_level, unsigned char) \
     ARRAY(list_indents, unsigned char) \
     ARRAY(drawer_stack, DrawerType) \
+    ARRAY(markup_stack, char) \
     ARRAY_STR(block_name_stack)
 
 #define TOKEN_TYPES \
@@ -44,6 +45,9 @@
     TOK(BULLET) \
     TOK(LIST_START) \
     TOK(LIST_END) \
+    TOK(BOLD_START) \
+    TOK(BOLD_END) \
+    TOK(WORD) \
     TOK(ERROR_SENTINEL)
 
 enum TokenType {
@@ -127,6 +131,20 @@ static inline bool is_whitespace(char c) {
     return iswspace(c);
 }
 
+static bool is_word_char(Scanner *s, char c) {
+    if (c == '\0') return false;
+
+    // words can't contain any of the markup symbols (e.g. *, /) we're
+    // currently inside. otherwise, they would consume the end token.
+    for (int i = 0; i < s->markup_stack.size; i++) {
+        if (c == s->markup_stack.contents[i]) return false;
+    }
+
+    if (is_whitespace(c)) return false;
+
+    return true;
+}
+
 static Bullet scan_bullet(TSLexer *lexer) {
     Bullet kind = NO_BULLET;
 
@@ -158,6 +176,33 @@ static Bullet scan_bullet(TSLexer *lexer) {
     return kind;
 }
 
+static bool scan_stars(Scanner *s, TSLexer *lexer, const bool *valid_symbols, unsigned char found_already) {
+    unsigned char new_level = found_already;
+    while (lexer->lookahead == '*') {
+        lexer->advance(lexer, false);
+        new_level++;
+    }
+
+    if (valid_symbols[END_SECTION] && new_level <= *array_back(&s->section_level)) {
+        LOG("***< ending section");
+        lexer->result_symbol = END_SECTION;
+        array_pop(&s->section_level);
+    } else {
+        LOG("***> emitting STARS");
+        lexer->result_symbol = STARS;
+        lexer->mark_end(lexer);
+
+        if (!is_whitespace(lexer->lookahead)) {
+            // must be followed up by whitespace.
+            return false;
+        }
+
+        array_push(&s->section_level, new_level);
+    }
+
+    return true;
+}
+
 bool tree_sitter_orgmode_external_scanner_scan(
     void *payload,
     TSLexer *lexer,
@@ -166,6 +211,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
     Scanner *s = (Scanner*) payload;
 
     if (valid_symbols[ERROR_SENTINEL]) {
+        LOG("!!! error");
         return false;
     }
 
@@ -179,7 +225,8 @@ bool tree_sitter_orgmode_external_scanner_scan(
     DrawerType in_drawer = s->drawer_stack.size == 0
         ? NO_DRAWER : *array_back(&s->drawer_stack);
 
-    LOG("indent: %d; in_drawer: %c", indent, in_drawer);
+    LOG("********");
+    LOG("indent: %d; in_drawer: %c; lookahead: '%c'", indent, in_drawer, lexer->lookahead);
 
     #define TOK(id) if (valid_symbols[id]) { LOG("EXPECTING TOKEN: " #id); }
     TOKEN_TYPES
@@ -199,53 +246,40 @@ bool tree_sitter_orgmode_external_scanner_scan(
         return true;
     }
 
-    if (valid_symbols[BULLET] || valid_symbols[LIST_START]) {
+    if (valid_symbols[BOLD_END] && lexer->lookahead == '*') {
+        lexer->advance(lexer, false);
+
+        LOG("trying for BOLD_END");
+        lexer->result_symbol = BOLD_END;
         lexer->mark_end(lexer);
+        array_pop(&s->markup_stack);
+        LOG("returning BOLD_END");
+        return true;
+    }
 
-        Bullet b = scan_bullet(lexer);
+    if (valid_symbols[BOLD_START] && lexer->lookahead == '*') {
+        LOG("trying for BOLD_START");
+        lexer->advance(lexer, false);
 
-        if (b != NO_BULLET) {
-            LOG("got bullet '%c'", b);
-            // got a bullet
-            if (valid_symbols[LIST_START] && (indent == 255 || col > indent)) {
-                lexer->result_symbol = LIST_START;
-                array_push(&s->list_indents, col);
-                LOG("pushing list start for bullet: %c", b);
-                return true;
+        if (is_whitespace(lexer->lookahead) || lexer->lookahead == '*') {
+            // this cannot be a BOLD_START in this case. it may be a STARS though.
+            LOG("... didn't work; trying STARS");
+            if (valid_symbols[STARS] && lexer->get_column(lexer) == 1) {
+                return scan_stars(s, lexer, valid_symbols, 1);
             }
-
-            if (valid_symbols[BULLET] && col == indent) {
-                lexer->mark_end(lexer);
-                lexer->result_symbol = BULLET;
-                LOG("returning bullet: %c", b);
-                return true;
-            }
+            LOG("... also not possible though!");
+            return false;
+        } else {
+            lexer->result_symbol = BOLD_START;
+            lexer->mark_end(lexer);
+            array_push(&s->markup_stack, '*');
+            LOG("returning BOLD_START");
+            return true;
         }
     }
 
     if (valid_symbols[STARS] && lexer->get_column(lexer) == 0 && lexer->lookahead == '*') {
-        lexer->mark_end(lexer);
-
-        unsigned char new_level = 0;
-        while (lexer->lookahead == '*') {
-            lexer->advance(lexer, false);
-            new_level++;
-        }
-
-        LOG("*** new level: %d. could end: %d", new_level, valid_symbols[END_SECTION]);
-
-        if (valid_symbols[END_SECTION] && new_level <= *array_back(&s->section_level)) {
-            LOG("***< ending section");
-            lexer->result_symbol = END_SECTION;
-            array_pop(&s->section_level);
-        } else {
-            LOG("***> emitting STARS");
-            lexer->result_symbol = STARS;
-            lexer->mark_end(lexer);
-            array_push(&s->section_level, new_level);
-        }
-
-        return true;
+        return scan_stars(s, lexer, valid_symbols, 0);
     }
 
     if (in_drawer == PROPERTY_DRAWER && valid_symbols[PROPERTY_NAME] && lexer->lookahead == ':') {
@@ -372,6 +406,42 @@ bool tree_sitter_orgmode_external_scanner_scan(
     if (valid_symbols[BLOCK_BEGIN_MARKER] && scan_literal(lexer, "#+begin_")) {
         LOG("got a BLOCK_BEGIN_MARKER");
         lexer->result_symbol = BLOCK_BEGIN_MARKER;
+        lexer->mark_end(lexer);
+        return true;
+    }
+
+    if (valid_symbols[BULLET] || valid_symbols[LIST_START]) {
+        lexer->mark_end(lexer);
+
+        Bullet b = scan_bullet(lexer);
+        LOG("tried to scan a bullet; got: '%c'", b);
+
+        if (b != NO_BULLET) {
+            LOG("got bullet '%c'", b);
+            // got a bullet
+            if (valid_symbols[LIST_START] && (indent == 255 || col > indent)) {
+                lexer->result_symbol = LIST_START;
+                array_push(&s->list_indents, col);
+                LOG("pushing list start for bullet: %c", b);
+                return true;
+            }
+
+            if (valid_symbols[BULLET] && col == indent) {
+                lexer->mark_end(lexer);
+                lexer->result_symbol = BULLET;
+                LOG("returning bullet: %c", b);
+                return true;
+            }
+        }
+    }
+
+    if (valid_symbols[WORD] && is_word_char(s, lexer->lookahead)) {
+        LOG("attempting a word");
+        while (!lexer->eof(lexer) && is_word_char(s, lexer->lookahead)) {
+            lexer->advance(lexer, false);
+        }
+
+        lexer->result_symbol = WORD;
         lexer->mark_end(lexer);
         return true;
     }
