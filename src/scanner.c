@@ -383,7 +383,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
 
     lexer->mark_end(lexer);
 
-    const unsigned col = lexer->get_column(lexer);
+    unsigned col = lexer->get_column(lexer);
 
     unsigned char indent = s->list_indents.size == 0
         ? 255 : *array_back(&s->list_indents);
@@ -394,7 +394,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
     char fail = '\0'; // '\0' is "no fail yet"
 
     LOG("********");
-    LOG("indent: %d; in_drawer: %c; lookahead: '%c'", indent, in_drawer, lexer->lookahead);
+    LOG("col: %d; indent: %d; in_drawer: %c; lookahead: '%c'", col, indent, in_drawer, lexer->lookahead);
     LOG("%d items in markup stack", s->markup_stack.size);
     for (int i = 0; i < s->markup_stack.size; i++) {
         const enum TokenType ty = s->markup_stack.contents[i];
@@ -405,7 +405,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
     TOKEN_TYPES
     #undef TOK
 
-    if (valid_symbols[NEWLINE] && lexer->lookahead == '\n') {
+    if (!fail && valid_symbols[NEWLINE] && lexer->lookahead == '\n') {
         LOG("clearing markup stack, at end of line");
         array_clear(&s->markup_stack);
         lexer->advance(lexer, false);
@@ -417,14 +417,6 @@ bool tree_sitter_orgmode_external_scanner_scan(
     if (!fail && valid_symbols[END_SECTION] && lexer->eof(lexer)) {
         lexer->result_symbol = END_SECTION;
         LOG("ending section due to EOF");
-        return true;
-    }
-
-    bool can_end_list = lexer->eof(lexer) || (indent != 255 && col < indent);
-    if (!fail && valid_symbols[LIST_END] && can_end_list) {
-        lexer->result_symbol = LIST_END;
-        array_pop(&s->list_indents);
-        LOG("ending list!");
         return true;
     }
 
@@ -655,6 +647,12 @@ bool tree_sitter_orgmode_external_scanner_scan(
         fail = '#';
     }
 
+    // skip past any horizontal whitespace now
+    while (!lexer->eof(lexer) && (lexer->lookahead == ' ' || lexer->lookahead == '\t')) {
+        lexer->advance(lexer, true);
+        col = lexer->get_column(lexer);
+    }
+
     if (!fail && valid_symbols[BULLET] || valid_symbols[LIST_START]) {
         lexer->mark_end(lexer);
 
@@ -667,7 +665,8 @@ bool tree_sitter_orgmode_external_scanner_scan(
             if (valid_symbols[LIST_START] && (indent == 255 || col > indent)) {
                 lexer->result_symbol = LIST_START;
                 array_push(&s->list_indents, col);
-                LOG("pushing list start for bullet: %c", b);
+                LOG("pushing list start for bullet: %c (indent %d)",
+                    b, lexer->get_column(lexer));
                 return true;
             }
 
@@ -696,6 +695,15 @@ bool tree_sitter_orgmode_external_scanner_scan(
 
     if (fail == '*' && valid_symbols[STARS] && lexer->get_column(lexer) == 1) {
         return scan_stars(s, lexer, valid_symbols, 1);
+    }
+
+    bool can_end_list = lexer->eof(lexer) || (indent != 255 && col <= indent);
+    LOG("could we end a list (col: %d, indent: %d)? %s", col, indent, can_end_list ? "yes" : "no");
+    if (!fail && valid_symbols[LIST_END] && can_end_list) {
+        lexer->result_symbol = LIST_END;
+        array_pop(&s->list_indents);
+        LOG("ending list!");
+        return true;
     }
 
     // can do this even if failed earlier. use the failed character

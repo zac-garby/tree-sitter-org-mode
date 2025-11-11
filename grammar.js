@@ -70,7 +70,22 @@ export default grammar({
       $.paragraph,
       $.comment_line,
       $._blank_line,
+      // $.incomplete_element,
     ),
+
+    incomplete_element: $ => prec(-1, choice(
+      seq(
+        $._block_begin_marker,
+        $.block_begin_name,
+        optional(seq(
+          $._space, field("params", $.value)
+        )),
+        $._blank_line,
+        optional(seq(
+          field("body", alias(repeat($.element), "body")),
+        )),
+      )
+    )),
 
     body: $ => prec.left(0, seq(
       repeat1($.element)
@@ -103,7 +118,7 @@ export default grammar({
       $.value,
     ),
 
-    greater_block: $ => seq(
+    greater_block: $ => prec.right(0, seq(
       $._block_begin_marker,
       $.block_begin_name,
       optional(seq(
@@ -112,12 +127,14 @@ export default grammar({
       $._blank_line,
       optional(seq(
         field("body", alias(repeat($.element), "body")),
-        // $._blank_line,
       )),
-      $._block_end_marker,
-      $.block_end_name,
-    ),
+      optional(seq(
+        $._block_end_marker,
+        $.block_end_name,
+      ))
+    )),
 
+    // TODO: fix this (#+begin: is captured by keywords now)
     dynamic_block: $ => seq(
       "#+begin:",
       $.block_begin_name,
@@ -131,12 +148,12 @@ export default grammar({
       $.block_end_name,
     ),
 
-    drawer: $ => seq(
+    drawer: $ => prec.right(0, seq(
       $.drawer_name,
       $._blank_line,
       field("contents", alias(repeat($.element), "contents")),
-      $.drawer_end,
-    ),
+      optional($.drawer_end),
+    )),
 
     node_property: $ => prec(1, seq(
       field("name", $.property_name),
