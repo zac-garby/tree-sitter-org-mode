@@ -15,8 +15,8 @@ export default grammar({
   ],
 
   externals: $ => [
-    $._block_begin_marker, // #+begin_
-    $._block_end_marker, // #+end_
+    $.block_begin_marker, // #+begin_
+    $.block_end_marker, // #+end_
     $.block_begin_name,
     $.block_end_name,
     $.keyword_key,
@@ -24,29 +24,29 @@ export default grammar({
     $.drawer_end,
     $.property_name,
     $.stars,
-    $._end_section,
+    $.end_section,
     $.bullet,
     $.checkbox,
-    $._list_start,
-    $._list_end,
-    $._bold_start,
-    $._bold_end,
-    $._italic_start,
-    $._italic_end,
-    $._underline_start,
-    $._underline_end,
-    $._verbatim_start,
-    $._verbatim_end,
-    $._code_inline_start,
-    $._code_inline_end,
-    $._strikethrough_start,
-    $._strikethrough_end,
-    $._link_start,
-    $._link_end,
+    $.list_start,
+    $.list_end,
+    $.bold_start,
+    $.bold_end,
+    $.italic_start,
+    $.italic_end,
+    $.underline_start,
+    $.underline_end,
+    $.verbatim_start,
+    $.verbatim_end,
+    $.code_inline_start,
+    $.code_inline_end,
+    $.strikethrough_start,
+    $.strikethrough_end,
+    $.link_start,
+    $.link_end,
     $.word,
     $.pathreg,
     $.comment_line,
-    $._nl,
+    $.nl,
     $.error_sentinel,
   ],
 
@@ -60,7 +60,7 @@ export default grammar({
       repeat($.section),
     ),
 
-    element: $ => choice(
+    element: $ => prec(1, choice(
       $.keyword,
       $.greater_block,
       $.dynamic_block,
@@ -69,18 +69,18 @@ export default grammar({
       $.list,
       $.paragraph,
       $.comment_line,
-      $._blank_line,
+      $.blank_line,
       // $.incomplete_element,
-    ),
+    )),
 
     incomplete_element: $ => prec(-1, choice(
       seq(
-        $._block_begin_marker,
+        $.block_begin_marker,
         $.block_begin_name,
         optional(seq(
-          $._space, field("params", $.value)
+          $.space, field("params", $.value)
         )),
-        $._blank_line,
+        $.blank_line,
         optional(seq(
           field("body", alias(repeat($.element), "body")),
         )),
@@ -99,37 +99,37 @@ export default grammar({
       $.heading,
       optional($.body),
       repeat(field("subsection", $.section)),
-      $._end_section,
+      $.end_section,
     ),
 
     heading: $ => prec.left(0, seq(
       $.stars,
-      $._space,
+      $.space,
       alias(optional(choice("TODO", "DONE")), "keyword"),
       alias(optional(/\[#[a-zA-Z0-9]\]/), "cookie"),
       optional("COMMENT"),
-      optional(field("title", alias(repeat1($._object), "title"))),
-      repeat1($._blank_line),
+      optional(field("title", alias(repeat1($.object), "title"))),
+      repeat1($.blank_line),
     )),
 
     keyword: $ => seq(
       $.keyword_key,
-      $._space,
+      $.space,
       $.value,
     ),
 
     greater_block: $ => prec.right(0, seq(
-      $._block_begin_marker,
+      $.block_begin_marker,
       $.block_begin_name,
       optional(seq(
-        $._space, field("params", $.value)
+        $.space, field("params", $.value)
       )),
-      $._blank_line,
+      $.blank_line,
       optional(seq(
         field("body", alias(repeat($.element), "body")),
       )),
       optional(seq(
-        $._block_end_marker,
+        $.block_end_marker,
         $.block_end_name,
       ))
     )),
@@ -139,18 +139,18 @@ export default grammar({
       "#+begin:",
       $.block_begin_name,
       optional(seq(
-        $._space, field("params", $.value)
+        $.space, field("params", $.value)
       )),
-      $._blank_line,
+      $.blank_line,
       field("contents", alias(repeat($.element), "contents")),
-      $._blank_line,
+      $.blank_line,
       "#+end:",
       $.block_end_name,
     ),
 
     drawer: $ => prec.right(0, seq(
       $.drawer_name,
-      $._blank_line,
+      $.blank_line,
       field("contents", alias(repeat($.element), "contents")),
       optional($.drawer_end),
     )),
@@ -158,14 +158,14 @@ export default grammar({
     node_property: $ => prec(1, seq(
       field("name", $.property_name),
       optional(seq(
-        $._space, field("value", $.value),
+        $.space, field("value", $.value),
       ))
     )),
 
     list: $ => prec.left(0, seq(
-      $._list_start,
+      $.list_start,
       repeat($.list_item),
-      $._list_end,
+      $.list_end,
     )),
 
     list_item: $ => prec(1, seq(
@@ -175,19 +175,19 @@ export default grammar({
     )),
 
     paragraph: $ => prec.right(0, seq(
-      repeat1($._object),
-      $._nl,
+      repeat1($.object),
+      $.nl,
     )),
 
-    _object: $ => choice(
-      $._minimal_set,
+    object: $ => choice(
+      $.minimal_set,
       $.regular_link,
     ),
 
-    _minimal_set: $ => choice(
+    minimal_set: $ => choice(
       $.word,
       $.markup,
-      $._interrupted_start,
+      $.interrupted_start,
     ),
 
     markup: $ => choice(
@@ -200,44 +200,44 @@ export default grammar({
     ),
 
     regular_link: $ => seq(
-      $._link_start,
-      $._link_start,
+      $.link_start,
+      $.link_start,
       field("pathreg", $.pathreg),
-      $._link_end,
+      $.link_end,
       optional(seq(
-        $._link_start,
-        field("description", alias(repeat($._minimal_set), "description")),
-        $._link_end,
+        $.link_start,
+        field("description", alias(repeat($.minimal_set), "description")),
+        $.link_end,
       )),
-      $._link_end,
+      $.link_end,
     ),
 
-    // needed because, due to the $._start rules, these would not otherwise
+    // needed because, due to the $.start rules, these would not otherwise
     // constitute valid words.
-    _interrupted_start: $ => prec.left(-1, seq(
+    interrupted_start: $ => prec.left(-1, seq(
       choice(
         alias($.stars, $.word),
-        alias($._bold_start, $.word),
-        alias($._italic_start, $.word),
-        alias($._underline_start, $.word),
-        alias($._verbatim_start, $.word),
-        alias($._code_inline_start, $.word),
-        alias($._strikethrough_start, $.word),
-        alias($._link_start, $.word),
-        alias($._link_end, $.word),
+        alias($.bold_start, $.word),
+        alias($.italic_start, $.word),
+        alias($.underline_start, $.word),
+        alias($.verbatim_start, $.word),
+        alias($.code_inline_start, $.word),
+        alias($.strikethrough_start, $.word),
+        alias($.link_start, $.word),
+        alias($.link_end, $.word),
       ),
-      repeat($._object)
+      repeat($.object)
     )),
 
-    bold: $ => seq($._bold_start, repeat1($._object), $._bold_end),
-    italic: $ => seq($._italic_start, repeat1($._object), $._italic_end),
-    underline: $ => seq($._underline_start, repeat1($._object), $._underline_end),
-    verbatim: $ => seq($._verbatim_start, repeat1($._object), $._verbatim_end),
-    code_inline: $ => seq($._code_inline_start, repeat1($._object), $._code_inline_end),
-    strikethrough: $ => seq($._strikethrough_start, repeat1($._object), $._strikethrough_end),
+    bold: $ => seq($.bold_start, repeat1($.object), $.bold_end),
+    italic: $ => seq($.italic_start, repeat1($.object), $.italic_end),
+    underline: $ => seq($.underline_start, repeat1($.object), $.underline_end),
+    verbatim: $ => seq($.verbatim_start, repeat1($.object), $.verbatim_end),
+    code_inline: $ => seq($.code_inline_start, repeat1($.object), $.code_inline_end),
+    strikethrough: $ => seq($.strikethrough_start, repeat1($.object), $.strikethrough_end),
 
-    _blank_line: $ => /\r?\n[ \t]*/,
-    _space: $ => /[ \t]+/,
+    blank_line: $ => /\r?\n[ \t]*/,
+    space: $ => /[ \t]+/,
     value: $ => /[^\n]+/,
   }
 });

@@ -7,7 +7,7 @@
 
 #define NAME_MAX_LEN 64
 
-// #define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
     #define PRINT(fmt, ...) (printf(fmt, ##__VA_ARGS__))
@@ -416,6 +416,8 @@ bool tree_sitter_orgmode_external_scanner_scan(
 
     if (!fail && valid_symbols[END_SECTION] && lexer->eof(lexer)) {
         lexer->result_symbol = END_SECTION;
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
         LOG("ending section due to EOF");
         return true;
     }
@@ -727,6 +729,8 @@ bool tree_sitter_orgmode_external_scanner_scan(
 
         return true;
     }
+
+    LOG("no external token given");
 
     return false;
 }
