@@ -1,16 +1,1 @@
-#+TITLE: Calculating bidirectional type systems
-#+ALIAS: calc-bidir
-
-# my comment
-
-* From an existing undirected [[type system]]
-
-Given a relation Γ ⊢ T : τ, it's natural to want to derive a type inference
-function `infer :: Γ -> Expr -> Type` which has "the same behaviour". Not every
-expression has a type though, so we can return a list instead to indicate the
-possibility of failure.
-
-#+BEGIN_src
-my code
-is here
-#+end_src
+my [[link]]

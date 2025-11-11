@@ -228,6 +228,10 @@ static inline bool is_comment_char(char c) {
     return c != '\n';
 }
 
+static inline bool is_pathreg_char(char c) {
+    return c != '[' && c != ']' && c != '\n' && c != '\r';
+}
+
 static bool is_word_char(Scanner *s, char c) {
     if (c == '\0') return false;
 
@@ -395,13 +399,17 @@ bool tree_sitter_orgmode_external_scanner_scan(
         return true;
     }
 
-    if (!fail && valid_symbols[PATHREG] && lexer->lookahead != '[' && lexer->lookahead != ']') {
+    if (!fail && valid_symbols[PATHREG] && !lexer->eof(lexer) && is_pathreg_char(lexer->lookahead)) {
         LOG("trying pathreg");
 
+        lexer->advance(lexer, false);
+
         unsigned n;
-        for (n = 0;; n++) {
+        for (n = 1;; n++) {
+            if (lexer->eof(lexer)) break;
+
             char ch = lexer->lookahead;
-            if (ch != '[' && ch != ']') {
+            if (is_pathreg_char(ch)) {
                 lexer->advance(lexer, false);
 
                 if (ch == '\\' && (lexer->lookahead == '[' || lexer->lookahead == ']' || lexer->lookahead == '\\')) {
