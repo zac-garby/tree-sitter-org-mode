@@ -14,9 +14,10 @@ some haskell code
 
 :testdrawer:
 just a normal one
+with a [[link/to/something][my link!]]
 :end:
 
-** Another heading
+** Another [[linked heading]]
 
 - my /list of/ stuff!
   - is / here

@@ -57,6 +57,10 @@
           "named": true
         },
         {
+          "type": "regular_link",
+          "named": true
+        },
+        {
           "type": "word",
           "named": true
         }
@@ -78,6 +82,10 @@
       "types": [
         {
           "type": "markup",
+          "named": true
+        },
+        {
+          "type": "regular_link",
           "named": true
         },
         {
@@ -112,6 +120,29 @@
       "types": [
         {
           "type": "element",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "description",
+    "named": false,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "markup",
+          "named": true
+        },
+        {
+          "type": "regular_link",
+          "named": true
+        },
+        {
+          "type": "word",
           "named": true
         }
       ]
@@ -286,6 +317,10 @@
           "named": true
         },
         {
+          "type": "regular_link",
+          "named": true
+        },
+        {
           "type": "word",
           "named": true
         }
@@ -417,10 +452,40 @@
           "named": true
         },
         {
+          "type": "regular_link",
+          "named": true
+        },
+        {
           "type": "word",
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "regular_link",
+    "named": true,
+    "fields": {
+      "description": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "description",
+            "named": false
+          }
+        ]
+      },
+      "pathreg": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "pathreg",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -466,6 +531,10 @@
           "named": true
         },
         {
+          "type": "regular_link",
+          "named": true
+        },
+        {
           "type": "word",
           "named": true
         }
@@ -482,6 +551,10 @@
       "types": [
         {
           "type": "markup",
+          "named": true
+        },
+        {
+          "type": "regular_link",
           "named": true
         },
         {
@@ -504,6 +577,10 @@
           "named": true
         },
         {
+          "type": "regular_link",
+          "named": true
+        },
+        {
           "type": "word",
           "named": true
         }
@@ -520,6 +597,10 @@
       "types": [
         {
           "type": "markup",
+          "named": true
+        },
+        {
+          "type": "regular_link",
           "named": true
         },
         {
@@ -580,6 +661,10 @@
   {
     "type": "keyword",
     "named": false
+  },
+  {
+    "type": "pathreg",
+    "named": true
   },
   {
     "type": "property_name",

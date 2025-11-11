@@ -29,7 +29,7 @@
     ARRAY(section_level, unsigned char) \
     ARRAY(list_indents, unsigned char) \
     ARRAY(drawer_stack, DrawerType) \
-    ARRAY(markup_stack, char) \
+    ARRAY(markup_stack, enum TokenType) \
     ARRAY_STR(block_name_stack)
 
 #define TOKEN_TYPES \
@@ -57,8 +57,14 @@
     TOK(CODE_INLINE_END) \
     TOK(STRIKETHROUGH_START) \
     TOK(STRIKETHROUGH_END) \
+    TOK(LINK_START) \
+    TOK(LINK_END) \
     TOK(WORD) \
+    TOK(PATHREG) \
     TOK(ERROR_SENTINEL)
+
+#define NUM_MARKUP_TOKS (sizeof(markup_begins) / sizeof(enum TokenType))
+#define NUM_TOKS ERROR_SENTINEL
 
 enum TokenType {
 #define TOK(id) id,
@@ -88,18 +94,20 @@ static const enum TokenType markup_begins[] = {
     VERBATIM_START,
     CODE_INLINE_START,
     STRIKETHROUGH_START,
+    LINK_START,
 };
 
-static const enum TokenType markup_ends[] = {
-    BOLD_END,
-    ITALIC_END,
-    UNDERLINE_END,
-    VERBATIM_END,
-    CODE_INLINE_END,
-    STRIKETHROUGH_END,
+static const enum TokenType markup_ends[NUM_TOKS] = {
+    [BOLD_START] = BOLD_END,
+    [ITALIC_START] = ITALIC_END,
+    [UNDERLINE_START] = UNDERLINE_END,
+    [VERBATIM_START] = VERBATIM_END,
+    [CODE_INLINE_START] = CODE_INLINE_END,
+    [STRIKETHROUGH_START] = STRIKETHROUGH_END,
+    [LINK_START] = LINK_END,
 };
 
-static const char markup_chars[] = {
+static const char markup_chars[NUM_TOKS] = {
     [BOLD_START] = '*',
     [BOLD_END] = '*',
     [ITALIC_START] = '/',
@@ -112,6 +120,35 @@ static const char markup_chars[] = {
     [CODE_INLINE_END] = '~',
     [STRIKETHROUGH_START] = '+',
     [STRIKETHROUGH_END] = '+',
+    [LINK_START] = '[',
+    [LINK_END] = ']',
+};
+
+static const bool markup_no_follow[NUM_TOKS][255] = {
+#define NO(c) [c] = true
+#define WHITESPACE ['\t'] = true,
+
+    // the regular 'markup' tokens can't be followed by themselves or any
+    // whitespace
+    [BOLD_START] = {NO('*'), WHITESPACE},
+    [ITALIC_START] = {NO('/'), WHITESPACE},
+    [UNDERLINE_START] = {NO('_'), WHITESPACE},
+    [VERBATIM_START] = {NO('='), WHITESPACE},
+    [CODE_INLINE_START] = {NO('~'), WHITESPACE},
+    [STRIKETHROUGH_START] = {NO('+'), WHITESPACE},
+
+    // [ and ] for links can be followed by any character.
+    [LINK_START] = {},
+    [LINK_END] = {},
+
+    // TODO: _END tokens should ONLY be followed by:
+    // "Either a whitespace character, -, ., ,, ;, :, !, ?, ', ), }, [, ", \ (backslash), or the end of a line."
+
+    // TODO: we also need to do the characters which the tokens can come *after*!
+    // i.e. "Either a whitespace character, -, (, {, ', ", or the beginning of a line."
+
+#undef NO
+#undef WHITESPACE
 };
 
 #define ARRAY_STR(name) ARRAY(name, const char *)
@@ -183,7 +220,9 @@ static bool is_word_char(Scanner *s, char c) {
     // words can't contain any of the markup symbols (e.g. *, /) we're
     // currently inside. otherwise, they would consume the end token.
     for (int i = 0; i < s->markup_stack.size; i++) {
-        if (c == s->markup_stack.contents[i]) return false;
+        enum TokenType start_type = s->markup_stack.contents[i];
+        enum TokenType end_type = markup_ends[start_type];
+        if (c == markup_chars[end_type]) return false;
     }
 
     if (is_whitespace(c)) return false;
@@ -250,13 +289,10 @@ static bool scan_stars(Scanner *s, TSLexer *lexer, const bool *valid_symbols, un
 }
 
 static bool scan_markup_end(Scanner *s, TSLexer *lexer, const bool *valid_symbols, char *fail) {
-    char in_markup = s->markup_stack.size > 0
-        ? s->markup_stack.contents[s->markup_stack.size - 1] : '\0';
+    if (s->markup_stack.size == 0 || *fail) return false;
 
-    if (in_markup == '\0' || *fail) return false;
-
-    for (int i = 0; i < 6; i++) {
-        enum TokenType type = markup_ends[i];
+    for (int i = 0; i < NUM_MARKUP_TOKS; i++) {
+        enum TokenType type = markup_ends[markup_begins[i]];
         const char ch = markup_chars[type];
         if (valid_symbols[type] && lexer->lookahead == ch) {
             lexer->advance(lexer, false);
@@ -274,20 +310,19 @@ static bool scan_markup_end(Scanner *s, TSLexer *lexer, const bool *valid_symbol
 static bool scan_markup_start(Scanner *s, TSLexer *lexer, const bool *valid_symbols, char *fail) {
     if (*fail) return false;
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < NUM_MARKUP_TOKS; i++) {
         enum TokenType type = markup_begins[i];
         const char ch = markup_chars[type];
         if (valid_symbols[type] && lexer->lookahead == ch) {
             lexer->advance(lexer, false);
 
-            if (is_whitespace(lexer->lookahead) || lexer->lookahead == ch) {
-                // this cannot be a START in this case
-                LOG("failed to scan '%c' as markup start", ch);
+            if (markup_no_follow[type][lexer->lookahead]) {
+                LOG("failed to scan '%c' markup start. lookahead '%c' cannot follow", ch, lexer->lookahead);
                 *fail = ch;
             } else {
                 lexer->result_symbol = type;
                 lexer->mark_end(lexer);
-                array_push(&s->markup_stack, ch);
+                array_push(&s->markup_stack, type);
                 LOG("scanned '%c', markup start", ch);
                 return true;
             }
@@ -323,9 +358,6 @@ bool tree_sitter_orgmode_external_scanner_scan(
     DrawerType in_drawer = s->drawer_stack.size == 0
         ? NO_DRAWER : *array_back(&s->drawer_stack);
 
-    char in_markup = s->markup_stack.size == 0
-        ? '\0' : *array_back(&s->markup_stack);
-
     char fail = '\0'; // '\0' is "no fail yet"
 
     LOG("********");
@@ -346,6 +378,29 @@ bool tree_sitter_orgmode_external_scanner_scan(
         lexer->result_symbol = LIST_END;
         array_pop(&s->list_indents);
         LOG("ending list!");
+        return true;
+    }
+
+    if (!fail && valid_symbols[PATHREG] && lexer->lookahead != '[' && lexer->lookahead != ']') {
+        LOG("trying pathreg");
+
+        unsigned n;
+        for (n = 0;; n++) {
+            char ch = lexer->lookahead;
+            if (ch != '[' && ch != ']') {
+                lexer->advance(lexer, false);
+
+                if (ch == '\\' && (lexer->lookahead == '[' || lexer->lookahead == ']' || lexer->lookahead == '\\')) {
+                    lexer->advance(lexer, false);
+                }
+            } else {
+                break;
+            }
+        }
+
+        LOG("got pathreg, len: %d", n);
+        lexer->mark_end(lexer);
+        lexer->result_symbol = PATHREG;
         return true;
     }
 
@@ -563,10 +618,15 @@ bool tree_sitter_orgmode_external_scanner_scan(
     }
 
     // can do this even if failed earlier. use the failed character
-    if (valid_symbols[WORD] &&
-        (is_word_char(s, fail) || is_word_char(s, lexer->lookahead)))
-    {
-        LOG("attempting a word. already got char?: '%c'", fail);
+    if (
+        valid_symbols[WORD] &&
+        (is_word_char(s, fail) || is_word_char(s, lexer->lookahead))
+    ) {
+        if (fail != '\0') {
+            LOG("attempting a word. already got char?: '%c'", fail);
+        } else {
+            LOG("attempting a word. (from fresh; no earlier fails)");
+        }
 
         while (!lexer->eof(lexer) && is_word_char(s, lexer->lookahead)) {
             lexer->advance(lexer, false);
@@ -574,6 +634,8 @@ bool tree_sitter_orgmode_external_scanner_scan(
 
         lexer->result_symbol = WORD;
         lexer->mark_end(lexer);
+        LOG("got word!");
+
         return true;
     }
 

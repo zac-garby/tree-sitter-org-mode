@@ -39,7 +39,10 @@ export default grammar({
     $._code_inline_end,
     $._strikethrough_start,
     $._strikethrough_end,
+    $._link_start,
+    $._link_end,
     $.word,
+    $.pathreg,
     $.error_sentinel,
   ],
 
@@ -152,6 +155,11 @@ export default grammar({
     )),
 
     _object: $ => choice(
+      $._minimal_set,
+      $.regular_link,
+    ),
+
+    _minimal_set: $ => choice(
       $.word,
       $.markup,
       $._interrupted_start,
@@ -166,6 +174,19 @@ export default grammar({
       $.strikethrough,
     ),
 
+    regular_link: $ => seq(
+      $._link_start,
+      $._link_start,
+      field("pathreg", $.pathreg),
+      $._link_end,
+      optional(seq(
+        $._link_start,
+        field("description", alias(repeat($._minimal_set), "description")),
+        $._link_end,
+      )),
+      $._link_end,
+    ),
+
     // needed because, due to the $._start rules, these would not otherwise
     // constitute valid words.
     _interrupted_start: $ => prec.left(-1, seq(
@@ -177,6 +198,8 @@ export default grammar({
         alias($._verbatim_start, $.word),
         alias($._code_inline_start, $.word),
         alias($._strikethrough_start, $.word),
+        alias($._link_start, $.word),
+        alias($._link_end, $.word),
       ),
       repeat($._object)
     )),
