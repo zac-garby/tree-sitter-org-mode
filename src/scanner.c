@@ -37,6 +37,7 @@
     TOK(BLOCK_END_MARKER) \
     TOK(BLOCK_BEGIN_NAME) \
     TOK(BLOCK_END_NAME) \
+    TOK(KEYWORD_KEY) \
     TOK(DRAWER_NAME) \
     TOK(DRAWER_END) \
     TOK(PROPERTY_NAME) \
@@ -61,6 +62,7 @@
     TOK(LINK_END) \
     TOK(WORD) \
     TOK(PATHREG) \
+    TOK(COMMENT_LINE) \
     TOK(ERROR_SENTINEL)
 
 #define NUM_MARKUP_TOKS (sizeof(markup_begins) / sizeof(enum TokenType))
@@ -159,11 +161,19 @@ ARRAYS
 #undef ARRAY
 } Scanner;
 
-static unsigned scan_literal(TSLexer *lexer, const char *string) {
+static inline bool char_eq(char a, char b, bool ignore_case) {
+    if (ignore_case) {
+        return towlower(a) == towlower(b);
+    } else {
+        return a == b;
+    }
+}
+
+static unsigned scan_literal(TSLexer *lexer, const char *string, bool ignore_case) {
     unsigned len = 0;
 
     for (char c = *string; c != '\0'; c = *(++string)) {
-        if (lexer->eof(lexer) || lexer->lookahead != c) {
+        if (lexer->eof(lexer) || !char_eq(lexer->lookahead, c, ignore_case)) {
             return len;
         }
         lexer->advance(lexer, false);
@@ -212,6 +222,14 @@ static inline bool not_whitespace(char c) {
 
 static inline bool is_whitespace(char c) {
     return iswspace(c);
+}
+
+static inline bool is_kw_char(char c) {
+    return c != ':' && not_whitespace(c);
+}
+
+static inline bool is_comment_char(char c) {
+    return c != '\n';
 }
 
 static bool is_word_char(Scanner *s, char c) {
@@ -350,7 +368,7 @@ bool tree_sitter_orgmode_external_scanner_scan(
 
     lexer->mark_end(lexer);
 
-    unsigned col = lexer->get_column(lexer);
+    const unsigned col = lexer->get_column(lexer);
 
     unsigned char indent = s->list_indents.size == 0
         ? 255 : *array_back(&s->list_indents);
@@ -404,20 +422,20 @@ bool tree_sitter_orgmode_external_scanner_scan(
         return true;
     }
 
-    if (scan_markup_end(s, lexer, valid_symbols, &fail)) {
-        return true;
-    }
-
-    if (scan_markup_start(s, lexer, valid_symbols, &fail)) {
-        return true;
-    }
-
     if (!fail && valid_symbols[STARS] && lexer->get_column(lexer) == 0 && lexer->lookahead == '*') {
         return scan_stars(s, lexer, valid_symbols, 0);
     }
 
     if (fail == '*' && valid_symbols[STARS] && lexer->get_column(lexer) == 1) {
         return scan_stars(s, lexer, valid_symbols, 1);
+    }
+
+    if (scan_markup_end(s, lexer, valid_symbols, &fail)) {
+        return true;
+    }
+
+    if (scan_markup_start(s, lexer, valid_symbols, &fail)) {
+        return true;
     }
 
     if (!fail && in_drawer == PROPERTY_DRAWER && valid_symbols[PROPERTY_NAME] && lexer->lookahead == ':') {
@@ -498,8 +516,8 @@ bool tree_sitter_orgmode_external_scanner_scan(
     }
 
     if (!fail && valid_symbols[DRAWER_END] && in_drawer != NO_DRAWER) {
-        unsigned len = scan_literal(lexer, ":end:");
-        if (len == 5) {
+        unsigned len = scan_literal(lexer, ":end:", true);
+        if (len+1 == sizeof(":end:")) {
             lexer->mark_end(lexer);
             lexer->result_symbol = DRAWER_END;
             array_pop(&s->drawer_stack);
@@ -562,34 +580,62 @@ bool tree_sitter_orgmode_external_scanner_scan(
         return true;
     }
 
-    if (!fail && valid_symbols[BLOCK_END_MARKER]) {
-        unsigned len = scan_literal(lexer, "#+end_");
-        if (len == 6) {
-            LOG("got a BLOCK_END_MARKER");
-            lexer->result_symbol = BLOCK_END_MARKER;
-            lexer->mark_end(lexer);
-            return true;
-        } else if (len > 0) {
-            LOG("not a BLOCK_END, but defaulting to a WORD");
-            lexer->result_symbol = WORD;
-            lexer->mark_end(lexer);
-            return true;
-        }
-    }
+    if (!fail && lexer->lookahead == '#') {
+        lexer->advance(lexer, false);
 
-    if (!fail && valid_symbols[BLOCK_BEGIN_MARKER]) {
-        unsigned len = scan_literal(lexer, "#+begin_");
-        if (len == 8) {
-            LOG("got a BLOCK_BEGIN_MARKER");
-            lexer->result_symbol = BLOCK_BEGIN_MARKER;
-            lexer->mark_end(lexer);
-            return true;
-        } else if (len > 0) {
-            LOG("not a BLOCK_BEGIN, but defaulting to a WORD");
-            lexer->result_symbol = WORD;
+        if (lexer->lookahead == '+') {
+            // looking for a #+ pattern, e.g. #+begin_, or a keyword #+foo:
+            lexer->advance(lexer, false);
+            char ch = lexer->lookahead;
+
+            if (!fail && valid_symbols[BLOCK_END_MARKER]) {
+                unsigned len = scan_literal(lexer, "end_", true);
+                if (len+1 == sizeof("end_")) {
+                    lexer->result_symbol = BLOCK_END_MARKER;
+                    lexer->mark_end(lexer);
+                    return true;
+                } else if (len > 0) {
+                    fail = '#';
+                }
+            }
+
+            if (!fail && valid_symbols[BLOCK_BEGIN_MARKER]) {
+                unsigned len = scan_literal(lexer, "begin_", true);
+                if (len+1 == sizeof("begin_")) {
+                    lexer->result_symbol = BLOCK_BEGIN_MARKER;
+                    lexer->mark_end(lexer);
+                    return true;
+                } else if (len > 0) {
+                    fail = '#';
+                }
+            }
+
+            if (valid_symbols[KEYWORD_KEY]) {
+                unsigned len = skip_while(lexer, is_kw_char, false);
+                if (len > 0 || is_kw_char(ch)) {
+                    if (lexer->lookahead == ':') {
+                        lexer->advance(lexer, false);
+                        lexer->result_symbol = KEYWORD_KEY;
+                        lexer->mark_end(lexer);
+                        return true;
+                    } else {
+                        fail = '#';
+                    }
+                }
+            }
+        } else if (col == 0 && is_whitespace(lexer->lookahead) && valid_symbols[COMMENT_LINE]) {
+            // aha, a comment!
+            while (!lexer->eof(lexer) && is_comment_char(lexer->lookahead)) {
+                lexer->advance(lexer, false);
+            }
+            lexer->result_symbol = COMMENT_LINE;
             lexer->mark_end(lexer);
             return true;
         }
+
+        // thought we had a #+ pattern, but we don't. sad :(.
+        // probably it'll end up as a WORD later on now.
+        fail = '#';
     }
 
     if (!fail && valid_symbols[BULLET] || valid_symbols[LIST_START]) {

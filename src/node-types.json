@@ -4,6 +4,10 @@
     "named": true,
     "subtypes": [
       {
+        "type": "comment_line",
+        "named": true
+      },
+      {
         "type": "drawer",
         "named": true
       },
@@ -13,6 +17,10 @@
       },
       {
         "type": "greater_block",
+        "named": true
+      },
+      {
+        "type": "keyword",
         "named": true
       },
       {
@@ -152,15 +160,22 @@
     "type": "document",
     "named": true,
     "root": true,
-    "fields": {},
+    "fields": {
+      "zeroth_section": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "body",
+            "named": true
+          }
+        ]
+      }
+    },
     "children": {
       "multiple": true,
       "required": false,
       "types": [
-        {
-          "type": "body",
-          "named": true
-        },
         {
           "type": "section",
           "named": true
@@ -322,6 +337,25 @@
         },
         {
           "type": "word",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "keyword",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "keyword_key",
+          "named": true
+        },
+        {
+          "type": "value",
           "named": true
         }
       ]
@@ -647,6 +681,10 @@
     "named": true
   },
   {
+    "type": "comment_line",
+    "named": true
+  },
+  {
     "type": "cookie",
     "named": false
   },
@@ -661,6 +699,10 @@
   {
     "type": "keyword",
     "named": false
+  },
+  {
+    "type": "keyword_key",
+    "named": true
   },
   {
     "type": "pathreg",

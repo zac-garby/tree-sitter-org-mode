@@ -6,16 +6,20 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "SYMBOL",
-              "name": "body"
-            },
-            {
-              "type": "BLANK"
-            }
-          ]
+          "type": "FIELD",
+          "name": "zeroth_section",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "body"
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          }
         },
         {
           "type": "REPEAT",
@@ -29,6 +33,10 @@
     "element": {
       "type": "CHOICE",
       "members": [
+        {
+          "type": "SYMBOL",
+          "name": "keyword"
+        },
         {
           "type": "SYMBOL",
           "name": "greater_block"
@@ -52,6 +60,10 @@
         {
           "type": "SYMBOL",
           "name": "paragraph"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "comment_line"
         },
         {
           "type": "SYMBOL",
@@ -223,9 +235,22 @@
         ]
       }
     },
-    "value": {
-      "type": "PATTERN",
-      "value": "[^\\n]+"
+    "keyword": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "keyword_key"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_space"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "value"
+        }
+      ]
     },
     "greater_block": {
       "type": "SEQ",
@@ -904,10 +929,6 @@
         }
       ]
     },
-    "alphanum": {
-      "type": "PATTERN",
-      "value": "[a-zA-Z0-9_]"
-    },
     "_blank_line": {
       "type": "PATTERN",
       "value": "\\r?\\n[ \\t]*"
@@ -919,6 +940,10 @@
     "_space": {
       "type": "PATTERN",
       "value": "[ \\t]+"
+    },
+    "value": {
+      "type": "PATTERN",
+      "value": "[^\\n]+"
     }
   },
   "extras": [
@@ -945,6 +970,10 @@
     {
       "type": "SYMBOL",
       "name": "block_end_name"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "keyword_key"
     },
     {
       "type": "SYMBOL",
@@ -1041,6 +1070,10 @@
     {
       "type": "SYMBOL",
       "name": "pathreg"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "comment_line"
     },
     {
       "type": "SYMBOL",

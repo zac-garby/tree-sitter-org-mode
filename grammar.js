@@ -19,6 +19,7 @@ export default grammar({
     $._block_end_marker, // #+end_
     $.block_begin_name,
     $.block_end_name,
+    $.keyword_key,
     $.drawer_name,
     $.drawer_end,
     $.property_name,
@@ -43,6 +44,7 @@ export default grammar({
     $._link_end,
     $.word,
     $.pathreg,
+    $.comment_line,
     $.error_sentinel,
   ],
 
@@ -52,17 +54,19 @@ export default grammar({
 
   rules: {
     document: $ => seq(
-      optional($.body),
+      field("zeroth_section", optional($.body)),
       repeat($.section),
     ),
 
     element: $ => choice(
+      $.keyword,
       $.greater_block,
       $.dynamic_block,
       $.drawer,
       $.node_property,
       $.list,
       $.paragraph,
+      $.comment_line,
       $._blank_line,
     ),
 
@@ -91,7 +95,11 @@ export default grammar({
       repeat1($._blank_line),
     )),
 
-    value: $ => /[^\n]+/,
+    keyword: $ => seq(
+      $.keyword_key,
+      $._space,
+      $.value,
+    ),
 
     greater_block: $ => seq(
       $._block_begin_marker,
@@ -211,9 +219,9 @@ export default grammar({
     code_inline: $ => seq($._code_inline_start, repeat1($._object), $._code_inline_end),
     strikethrough: $ => seq($._strikethrough_start, repeat1($._object), $._strikethrough_end),
 
-    alphanum: $ => /[a-zA-Z0-9_]/,
     _blank_line: $ => /\r?\n[ \t]*/,
     _nl: $ => /\r?\n/,
-    _space: $ => /[ \t]+/
+    _space: $ => /[ \t]+/,
+    value: $ => /[^\n]+/,
   }
 });
