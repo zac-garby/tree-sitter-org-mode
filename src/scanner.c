@@ -3,10 +3,6 @@
 #include "tree_sitter/array.h"
 
 #include <stdbool.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
 #include <wctype.h>
 
 #define NAME_MAX_LEN 64
@@ -16,8 +12,8 @@
 #ifdef DEBUG
     #define PRINT(fmt, ...) (printf(fmt, ##__VA_ARGS__))
     #define LOG(fmt, ...) do { \
-        char msg[128]; \
-        sprintf(msg, fmt, ##__VA_ARGS__); \
+        char msg[255]; \
+        snprintf(msg, 255, fmt, ##__VA_ARGS__); \
         lexer->log(lexer, msg); \
     } while (0)
 #else
