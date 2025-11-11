@@ -12,7 +12,6 @@ export default grammar({
 
   supertypes: $ => [
     $.element,
-    $.object,
   ],
 
   externals: $ => [
@@ -30,6 +29,16 @@ export default grammar({
     $._list_end,
     $._bold_start,
     $._bold_end,
+    $._italic_start,
+    $._italic_end,
+    $._underline_start,
+    $._underline_end,
+    $._verbatim_start,
+    $._verbatim_end,
+    $._code_inline_start,
+    $._code_inline_end,
+    $._strikethrough_start,
+    $._strikethrough_end,
     $.word,
     $.error_sentinel,
   ],
@@ -37,8 +46,6 @@ export default grammar({
   extras: $ => [
     /[ \t]+/
   ],
-
-  // word: $ => $.word,
 
   rules: {
     document: $ => seq(
@@ -77,7 +84,7 @@ export default grammar({
       alias(optional(choice("TODO", "DONE")), "keyword"),
       alias(optional(/\[#[a-zA-Z0-9]\]/), "cookie"),
       optional("COMMENT"),
-      optional(field("title", alias(repeat1($.object), "title"))),
+      optional(field("title", alias(repeat1($._object), "title"))),
       repeat1($._blank_line),
     )),
 
@@ -140,23 +147,48 @@ export default grammar({
     checkbox: $ => choice("[ ]", "[-]", "[X]"),
 
     paragraph: $ => prec.right(0, seq(
-      repeat1($.object),
+      repeat1($._object),
       $._nl,
     )),
 
-    object: $ => choice(
+    _object: $ => choice(
       $.word,
       $.markup,
+      $._interrupted_start,
     ),
 
     markup: $ => choice(
       $.bold,
+      $.italic,
+      $.underline,
+      $.verbatim,
+      $.code_inline,
+      $.strikethrough,
     ),
 
-    bold: $ => seq($._bold_start, repeat1($.object), $._bold_end),
+    // needed because, due to the $._start rules, these would not otherwise
+    // constitute valid words.
+    _interrupted_start: $ => prec.left(-1, seq(
+      choice(
+        alias($.stars, $.word),
+        alias($._bold_start, $.word),
+        alias($._italic_start, $.word),
+        alias($._underline_start, $.word),
+        alias($._verbatim_start, $.word),
+        alias($._code_inline_start, $.word),
+        alias($._strikethrough_start, $.word),
+      ),
+      repeat($._object)
+    )),
+
+    bold: $ => seq($._bold_start, repeat1($._object), $._bold_end),
+    italic: $ => seq($._italic_start, repeat1($._object), $._italic_end),
+    underline: $ => seq($._underline_start, repeat1($._object), $._underline_end),
+    verbatim: $ => seq($._verbatim_start, repeat1($._object), $._verbatim_end),
+    code_inline: $ => seq($._code_inline_start, repeat1($._object), $._code_inline_end),
+    strikethrough: $ => seq($._strikethrough_start, repeat1($._object), $._strikethrough_end),
 
     alphanum: $ => /[a-zA-Z0-9_]/,
-    // word: $ => /[^\s]+/,
     _blank_line: $ => /\r?\n[ \t]*/,
     _nl: $ => /\r?\n/,
     _space: $ => /[ \t]+/

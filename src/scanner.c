@@ -47,6 +47,16 @@
     TOK(LIST_END) \
     TOK(BOLD_START) \
     TOK(BOLD_END) \
+    TOK(ITALIC_START) \
+    TOK(ITALIC_END) \
+    TOK(UNDERLINE_START) \
+    TOK(UNDERLINE_END) \
+    TOK(VERBATIM_START) \
+    TOK(VERBATIM_END) \
+    TOK(CODE_INLINE_START) \
+    TOK(CODE_INLINE_END) \
+    TOK(STRIKETHROUGH_START) \
+    TOK(STRIKETHROUGH_END) \
     TOK(WORD) \
     TOK(ERROR_SENTINEL)
 
@@ -71,6 +81,39 @@ typedef enum {
     NO_BULLET = 'X',
 } Bullet;
 
+static const enum TokenType markup_begins[] = {
+    BOLD_START,
+    ITALIC_START,
+    UNDERLINE_START,
+    VERBATIM_START,
+    CODE_INLINE_START,
+    STRIKETHROUGH_START,
+};
+
+static const enum TokenType markup_ends[] = {
+    BOLD_END,
+    ITALIC_END,
+    UNDERLINE_END,
+    VERBATIM_END,
+    CODE_INLINE_END,
+    STRIKETHROUGH_END,
+};
+
+static const char markup_chars[] = {
+    [BOLD_START] = '*',
+    [BOLD_END] = '*',
+    [ITALIC_START] = '/',
+    [ITALIC_END] = '/',
+    [UNDERLINE_START] = '_',
+    [UNDERLINE_END] = '_',
+    [VERBATIM_START] = '=',
+    [VERBATIM_END] = '=',
+    [CODE_INLINE_START] = '~',
+    [CODE_INLINE_END] = '~',
+    [STRIKETHROUGH_START] = '+',
+    [STRIKETHROUGH_END] = '+',
+};
+
 #define ARRAY_STR(name) ARRAY(name, const char *)
 
 typedef struct {
@@ -79,23 +122,26 @@ ARRAYS
 #undef ARRAY
 } Scanner;
 
-static bool scan_literal(TSLexer *lexer, const char *string) {
+static unsigned scan_literal(TSLexer *lexer, const char *string) {
+    unsigned len = 0;
+
     for (char c = *string; c != '\0'; c = *(++string)) {
         if (lexer->eof(lexer) || lexer->lookahead != c) {
-            return false;
+            return len;
         }
         lexer->advance(lexer, false);
+        len++;
     }
-    return true;
+    return len;
 }
 
 static const char *scan_while(TSLexer *lexer, bool (*pred)(char)) {
-    if (!pred(lexer->lookahead)) return NULL;
+    if (lexer->eof(lexer) || !pred(lexer->lookahead)) return NULL;
 
     char *name = ts_malloc(sizeof(char) * NAME_MAX_LEN);
     unsigned n;
 
-    for (n = 0; pred(lexer->lookahead); n++) {
+    for (n = 0; pred(lexer->lookahead) && !lexer->eof(lexer); n++) {
         name[n] = lexer->lookahead;
         lexer->advance(lexer, false);
     }
@@ -203,12 +249,64 @@ static bool scan_stars(Scanner *s, TSLexer *lexer, const bool *valid_symbols, un
     return true;
 }
 
+static bool scan_markup_end(Scanner *s, TSLexer *lexer, const bool *valid_symbols, char *fail) {
+    char in_markup = s->markup_stack.size > 0
+        ? s->markup_stack.contents[s->markup_stack.size - 1] : '\0';
+
+    if (in_markup == '\0' || *fail) return false;
+
+    for (int i = 0; i < 6; i++) {
+        enum TokenType type = markup_ends[i];
+        const char ch = markup_chars[type];
+        if (valid_symbols[type] && lexer->lookahead == ch) {
+            lexer->advance(lexer, false);
+            lexer->result_symbol = type;
+            lexer->mark_end(lexer);
+            LOG("scanned '%c', markup end", ch);
+            array_pop(&s->markup_stack);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool scan_markup_start(Scanner *s, TSLexer *lexer, const bool *valid_symbols, char *fail) {
+    if (*fail) return false;
+
+    for (int i = 0; i < 6; i++) {
+        enum TokenType type = markup_begins[i];
+        const char ch = markup_chars[type];
+        if (valid_symbols[type] && lexer->lookahead == ch) {
+            lexer->advance(lexer, false);
+
+            if (is_whitespace(lexer->lookahead) || lexer->lookahead == ch) {
+                // this cannot be a START in this case
+                LOG("failed to scan '%c' as markup start", ch);
+                *fail = ch;
+            } else {
+                lexer->result_symbol = type;
+                lexer->mark_end(lexer);
+                array_push(&s->markup_stack, ch);
+                LOG("scanned '%c', markup start", ch);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 bool tree_sitter_orgmode_external_scanner_scan(
     void *payload,
     TSLexer *lexer,
     const bool *valid_symbols
 ) {
     Scanner *s = (Scanner*) payload;
+
+    if (lexer->lookahead == '\n') {
+        array_clear(&s->markup_stack);
+    }
 
     if (valid_symbols[ERROR_SENTINEL]) {
         LOG("!!! error");
@@ -225,6 +323,11 @@ bool tree_sitter_orgmode_external_scanner_scan(
     DrawerType in_drawer = s->drawer_stack.size == 0
         ? NO_DRAWER : *array_back(&s->drawer_stack);
 
+    char in_markup = s->markup_stack.size == 0
+        ? '\0' : *array_back(&s->markup_stack);
+
+    char fail = '\0'; // '\0' is "no fail yet"
+
     LOG("********");
     LOG("indent: %d; in_drawer: %c; lookahead: '%c'", indent, in_drawer, lexer->lookahead);
 
@@ -232,129 +335,129 @@ bool tree_sitter_orgmode_external_scanner_scan(
     TOKEN_TYPES
     #undef TOK
 
-    if (valid_symbols[END_SECTION] && lexer->eof(lexer)) {
+    if (!fail && valid_symbols[END_SECTION] && lexer->eof(lexer)) {
         lexer->result_symbol = END_SECTION;
         LOG("ending section due to EOF");
         return true;
     }
 
     bool can_end_list = lexer->eof(lexer) || (indent != 255 && col < indent);
-    if (valid_symbols[LIST_END] && can_end_list) {
+    if (!fail && valid_symbols[LIST_END] && can_end_list) {
         lexer->result_symbol = LIST_END;
         array_pop(&s->list_indents);
         LOG("ending list!");
         return true;
     }
 
-    if (valid_symbols[BOLD_END] && lexer->lookahead == '*') {
-        lexer->advance(lexer, false);
-
-        LOG("trying for BOLD_END");
-        lexer->result_symbol = BOLD_END;
-        lexer->mark_end(lexer);
-        array_pop(&s->markup_stack);
-        LOG("returning BOLD_END");
+    if (scan_markup_end(s, lexer, valid_symbols, &fail)) {
         return true;
     }
 
-    if (valid_symbols[BOLD_START] && lexer->lookahead == '*') {
-        LOG("trying for BOLD_START");
-        lexer->advance(lexer, false);
-
-        if (is_whitespace(lexer->lookahead) || lexer->lookahead == '*') {
-            // this cannot be a BOLD_START in this case. it may be a STARS though.
-            LOG("... didn't work; trying STARS");
-            if (valid_symbols[STARS] && lexer->get_column(lexer) == 1) {
-                return scan_stars(s, lexer, valid_symbols, 1);
-            }
-            LOG("... also not possible though!");
-            return false;
-        } else {
-            lexer->result_symbol = BOLD_START;
-            lexer->mark_end(lexer);
-            array_push(&s->markup_stack, '*');
-            LOG("returning BOLD_START");
-            return true;
-        }
+    if (scan_markup_start(s, lexer, valid_symbols, &fail)) {
+        return true;
     }
 
-    if (valid_symbols[STARS] && lexer->get_column(lexer) == 0 && lexer->lookahead == '*') {
+    if (!fail && valid_symbols[STARS] && lexer->get_column(lexer) == 0 && lexer->lookahead == '*') {
         return scan_stars(s, lexer, valid_symbols, 0);
     }
 
-    if (in_drawer == PROPERTY_DRAWER && valid_symbols[PROPERTY_NAME] && lexer->lookahead == ':') {
+    if (fail == '*' && valid_symbols[STARS] && lexer->get_column(lexer) == 1) {
+        return scan_stars(s, lexer, valid_symbols, 1);
+    }
+
+    if (!fail && in_drawer == PROPERTY_DRAWER && valid_symbols[PROPERTY_NAME] && lexer->lookahead == ':') {
         LOG("looking for a property name");
 
         lexer->advance(lexer, false);
         const char *name = scan_while(lexer, is_property_name_char);
-        if (name == NULL || lexer->lookahead != ':') return false;
-        lexer->advance(lexer, false);
+        if (name != NULL) {
+            if (lexer->lookahead == ':') {
+                lexer->advance(lexer, false);
 
-        LOG("got one: %s", name);
+                LOG("got one: %s", name);
 
-        // a name can't be 'end'
-        if (strcmp(name, "end") == 0) {
-            if (valid_symbols[DRAWER_END]) {
-                lexer->result_symbol = DRAWER_END;
-                array_pop(&s->drawer_stack);
+                // a name can't be 'end'
+                if (strcmp(name, "end") == 0) {
+                    if (valid_symbols[DRAWER_END]) {
+                        lexer->result_symbol = DRAWER_END;
+                        array_pop(&s->drawer_stack);
+                        lexer->mark_end(lexer);
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+
+                ts_free((void*) name);
                 lexer->mark_end(lexer);
+                lexer->result_symbol = PROPERTY_NAME;
+                LOG("returning property name");
+
                 return true;
             } else {
-                return false;
+                ts_free((void*) name);
+                lexer->mark_end(lexer);
+                lexer->result_symbol = WORD;
+
+                return true;
             }
         }
-
-        ts_free((void*) name);
-        lexer->mark_end(lexer);
-        lexer->result_symbol = PROPERTY_NAME;
-        LOG("returning property name");
-
-        return true;
     }
 
-    if (in_drawer != PROPERTY_DRAWER && valid_symbols[DRAWER_NAME] && lexer->lookahead == ':') {
+    if (!fail && in_drawer != PROPERTY_DRAWER && valid_symbols[DRAWER_NAME] && lexer->lookahead == ':') {
         lexer->advance(lexer, false);
         const char *name = scan_while(lexer, is_name_char);
-        if (name == NULL || lexer->lookahead != ':') return false;
 
-        lexer->advance(lexer, false);
+        if (name != NULL) {
+            if (lexer->lookahead == ':') {
+                lexer->advance(lexer, false);
 
-        // a name can't be 'end'
-        if (strcmp(name, "end") == 0) {
-            if (valid_symbols[DRAWER_END]) {
-                lexer->result_symbol = DRAWER_END;
-                array_pop(&s->drawer_stack);
+                // a name can't be 'end'
+                if (strcmp(name, "end") == 0) {
+                    if (valid_symbols[DRAWER_END]) {
+                        lexer->result_symbol = DRAWER_END;
+                        array_pop(&s->drawer_stack);
+                        lexer->mark_end(lexer);
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
+
+                DrawerType drawer_type = strcmp(name, "properties") == 0
+                    ? PROPERTY_DRAWER : NORMAL_DRAWER;
+                ts_free((void*) name);
+                array_push(&s->drawer_stack, drawer_type);
+
+                lexer->result_symbol = DRAWER_NAME;
                 lexer->mark_end(lexer);
                 return true;
             } else {
-                return false;
+                LOG("defaulting drawer name to a WORD, as no ':' following");
+                lexer->result_symbol = WORD;
+                lexer->mark_end(lexer);
+                ts_free((void*) name);
+                return true;
             }
         }
-
-        DrawerType drawer_type = strcmp(name, "properties") == 0
-            ? PROPERTY_DRAWER : NORMAL_DRAWER;
-        ts_free((void*) name);
-        array_push(&s->drawer_stack, drawer_type);
-
-        lexer->result_symbol = DRAWER_NAME;
-        lexer->mark_end(lexer);
-
-        return true;
     }
 
-    if (valid_symbols[DRAWER_END]
-        && scan_literal(lexer, ":end:")
-        && in_drawer != NO_DRAWER)
-    {
-        lexer->mark_end(lexer);
-        lexer->result_symbol = DRAWER_END;
-        array_pop(&s->drawer_stack);
-        LOG("returning drawer end");
-
-        return true;
+    if (!fail && valid_symbols[DRAWER_END] && in_drawer != NO_DRAWER) {
+        unsigned len = scan_literal(lexer, ":end:");
+        if (len == 5) {
+            lexer->mark_end(lexer);
+            lexer->result_symbol = DRAWER_END;
+            array_pop(&s->drawer_stack);
+            return true;
+        } else if (len > 0) {
+            lexer->mark_end(lexer);
+            lexer->result_symbol = WORD;
+            LOG("giving a WORD instead of an DRAWER_END");
+            return true;
+        }
     }
 
-    if (valid_symbols[BLOCK_BEGIN_NAME]) {
+    if (!fail && valid_symbols[BLOCK_BEGIN_NAME]) {
         lexer->log(lexer, "looking for a BLOCK_BEGIN_NAME");
 
         const char *name = scan_while(lexer, not_whitespace);
@@ -367,50 +470,74 @@ bool tree_sitter_orgmode_external_scanner_scan(
 
         lexer->result_symbol = BLOCK_BEGIN_NAME;
         lexer->mark_end(lexer);
+
         return true;
     }
 
-    if (valid_symbols[BLOCK_END_NAME]) {
+    if (!fail && valid_symbols[BLOCK_END_NAME]) {
         lexer->log(lexer, "looking for a BLOCK_END_NAME");
 
         const char *name = scan_while(lexer, not_whitespace);
         if (name == NULL) return false;
 
         if (s->block_name_stack.size == 0) {
+            LOG("got one, but nothing on the stack...");
             ts_free((void*) name);
             return false;
         }
 
         const char *top_name = array_pop(&s->block_name_stack);
+        LOG("top name: '%s'", top_name);
         int compare = strncmp(name, top_name, NAME_MAX_LEN);
         LOG("comparing '%s' with '%s': %d", name, top_name, compare);
 
-        ts_free((void*) top_name);
         ts_free((void*) name);
 
-        if (compare != 0) return false;
+        if (compare != 0) {
+            // push it back again; we're just a word
+            array_push(&s->block_name_stack, top_name);
+            lexer->result_symbol = WORD;
+        } else {
+            ts_free((void*) top_name);
+            lexer->result_symbol = BLOCK_END_NAME;
+        }
 
-        lexer->result_symbol = BLOCK_END_NAME;
         lexer->mark_end(lexer);
 
         return true;
     }
 
-    if (valid_symbols[BLOCK_END_MARKER] && scan_literal(lexer, "#+end_")) {
-        LOG("got a BLOCK_END_MARKER");
-        lexer->result_symbol = BLOCK_END_MARKER;
-        lexer->mark_end(lexer);
-        return true;
+    if (!fail && valid_symbols[BLOCK_END_MARKER]) {
+        unsigned len = scan_literal(lexer, "#+end_");
+        if (len == 6) {
+            LOG("got a BLOCK_END_MARKER");
+            lexer->result_symbol = BLOCK_END_MARKER;
+            lexer->mark_end(lexer);
+            return true;
+        } else if (len > 0) {
+            LOG("not a BLOCK_END, but defaulting to a WORD");
+            lexer->result_symbol = WORD;
+            lexer->mark_end(lexer);
+            return true;
+        }
     }
 
-    if (valid_symbols[BLOCK_BEGIN_MARKER] && scan_literal(lexer, "#+begin_")) {
-        LOG("got a BLOCK_BEGIN_MARKER");
-        lexer->result_symbol = BLOCK_BEGIN_MARKER;
-        lexer->mark_end(lexer);
-        return true;
+    if (!fail && valid_symbols[BLOCK_BEGIN_MARKER]) {
+        unsigned len = scan_literal(lexer, "#+begin_");
+        if (len == 8) {
+            LOG("got a BLOCK_BEGIN_MARKER");
+            lexer->result_symbol = BLOCK_BEGIN_MARKER;
+            lexer->mark_end(lexer);
+            return true;
+        } else if (len > 0) {
+            LOG("not a BLOCK_BEGIN, but defaulting to a WORD");
+            lexer->result_symbol = WORD;
+            lexer->mark_end(lexer);
+            return true;
+        }
     }
 
-    if (valid_symbols[BULLET] || valid_symbols[LIST_START]) {
+    if (!fail && valid_symbols[BULLET] || valid_symbols[LIST_START]) {
         lexer->mark_end(lexer);
 
         Bullet b = scan_bullet(lexer);
@@ -435,8 +562,12 @@ bool tree_sitter_orgmode_external_scanner_scan(
         }
     }
 
-    if (valid_symbols[WORD] && is_word_char(s, lexer->lookahead)) {
-        LOG("attempting a word");
+    // can do this even if failed earlier. use the failed character
+    if (valid_symbols[WORD] &&
+        (is_word_char(s, fail) || is_word_char(s, lexer->lookahead)))
+    {
+        LOG("attempting a word. already got char?: '%c'", fail);
+
         while (!lexer->eof(lexer) && is_word_char(s, lexer->lookahead)) {
             lexer->advance(lexer, false);
         }

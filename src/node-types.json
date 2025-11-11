@@ -30,20 +30,6 @@
     ]
   },
   {
-    "type": "object",
-    "named": true,
-    "subtypes": [
-      {
-        "type": "markup",
-        "named": true
-      },
-      {
-        "type": "word",
-        "named": true
-      }
-    ]
-  },
-  {
     "type": "body",
     "named": true,
     "fields": {},
@@ -67,7 +53,11 @@
       "required": true,
       "types": [
         {
-          "type": "object",
+          "type": "markup",
+          "named": true
+        },
+        {
+          "type": "word",
           "named": true
         }
       ]
@@ -77,6 +67,25 @@
     "type": "checkbox",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "code_inline",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "markup",
+          "named": true
+        },
+        {
+          "type": "word",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "content",
@@ -265,6 +274,25 @@
     }
   },
   {
+    "type": "italic",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "markup",
+          "named": true
+        },
+        {
+          "type": "word",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "list",
     "named": true,
     "fields": {},
@@ -326,6 +354,26 @@
         {
           "type": "bold",
           "named": true
+        },
+        {
+          "type": "code_inline",
+          "named": true
+        },
+        {
+          "type": "italic",
+          "named": true
+        },
+        {
+          "type": "strikethrough",
+          "named": true
+        },
+        {
+          "type": "underline",
+          "named": true
+        },
+        {
+          "type": "verbatim",
+          "named": true
         }
       ]
     }
@@ -365,7 +413,11 @@
       "required": true,
       "types": [
         {
-          "type": "object",
+          "type": "markup",
+          "named": true
+        },
+        {
+          "type": "word",
           "named": true
         }
       ]
@@ -402,6 +454,25 @@
     }
   },
   {
+    "type": "strikethrough",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "markup",
+          "named": true
+        },
+        {
+          "type": "word",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "title",
     "named": false,
     "fields": {},
@@ -410,7 +481,49 @@
       "required": true,
       "types": [
         {
-          "type": "object",
+          "type": "markup",
+          "named": true
+        },
+        {
+          "type": "word",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "underline",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "markup",
+          "named": true
+        },
+        {
+          "type": "word",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "verbatim",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "markup",
+          "named": true
+        },
+        {
+          "type": "word",
           "named": true
         }
       ]

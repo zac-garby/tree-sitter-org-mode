@@ -1,5 +1,14 @@
-#+begin_src hs
-some haskell code
-#+end_src
+#+begin_foo
+testing :)
+#+end_notthis
+#+end_foo
 
-** Another heading
+:properties:
+
+:end:
+
+hello /a/, *world //
+
+- foo +bar+ + baz
+- another
+- list
