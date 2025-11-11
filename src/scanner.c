@@ -7,7 +7,7 @@
 
 #define NAME_MAX_LEN 64
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
     #define PRINT(fmt, ...) (printf(fmt, ##__VA_ARGS__))
