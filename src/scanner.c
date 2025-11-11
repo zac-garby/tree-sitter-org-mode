@@ -271,12 +271,11 @@ static Bullet scan_bullet(TSLexer *lexer) {
 
     lexer->advance(lexer, false);
 
-    if (skip_while(lexer, is_whitespace, true) == 0) {
-        // we need at least one space following a bullet
+    if (is_whitespace(lexer->lookahead)) {
+        return kind;
+    } else {
         return NO_BULLET;
     }
-
-    return kind;
 }
 
 static bool scan_stars(Scanner *s, TSLexer *lexer, const bool *valid_symbols, unsigned char found_already) {
