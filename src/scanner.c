@@ -40,6 +40,7 @@
     TOK(STARS) \
     TOK(END_SECTION) \
     TOK(BULLET) \
+    TOK(CHECKBOX) \
     TOK(LIST_START) \
     TOK(LIST_END) \
     TOK(BOLD_START) \
@@ -59,6 +60,7 @@
     TOK(WORD) \
     TOK(PATHREG) \
     TOK(COMMENT_LINE) \
+    TOK(NEWLINE) \
     TOK(ERROR_SENTINEL)
 
 #define NUM_MARKUP_TOKS (sizeof(markup_begins) / sizeof(enum TokenType))
@@ -124,7 +126,7 @@ static const char markup_chars[NUM_TOKS] = {
 
 static const bool markup_no_follow[NUM_TOKS][255] = {
 #define NO(c) [c] = true
-#define WHITESPACE ['\t'] = true,
+#define WHITESPACE ['\t'] = true, [' '] = true
 
     // the regular 'markup' tokens can't be followed by themselves or any
     // whitespace
@@ -152,9 +154,9 @@ static const bool markup_no_follow[NUM_TOKS][255] = {
 #define ARRAY_STR(name) ARRAY(name, const char *)
 
 typedef struct {
-#define ARRAY(name, type) Array(type) name;
-ARRAYS
-#undef ARRAY
+    #define ARRAY(name, type) Array(type) name;
+    ARRAYS
+    #undef ARRAY
 } Scanner;
 
 static inline bool char_eq(char a, char b, bool ignore_case) {
@@ -232,6 +234,10 @@ static inline bool is_pathreg_char(char c) {
     return c != '[' && c != ']' && c != '\n' && c != '\r';
 }
 
+static inline bool is_checkbox_char(char c) {
+    return c == ' ' || c == 'X' || c == '-';
+}
+
 static bool is_word_char(Scanner *s, char c) {
     if (c == '\0') return false;
 
@@ -296,6 +302,7 @@ static bool scan_stars(Scanner *s, TSLexer *lexer, const bool *valid_symbols, un
 
         if (!is_whitespace(lexer->lookahead)) {
             // must be followed up by whitespace.
+            LOG("but it's not followed by whitespace");
             return false;
         }
 
@@ -333,6 +340,19 @@ static bool scan_markup_start(Scanner *s, TSLexer *lexer, const bool *valid_symb
         if (valid_symbols[type] && lexer->lookahead == ch) {
             lexer->advance(lexer, false);
 
+            if (valid_symbols[CHECKBOX] && type == LINK_START && is_checkbox_char(lexer->lookahead)) {
+                LOG("looks like we've got a checkbox here?");
+                lexer->advance(lexer, false);
+                if (lexer->lookahead == markup_chars[LINK_END]) {
+                    lexer->advance(lexer, false);
+                    lexer->result_symbol = CHECKBOX;
+                    lexer->mark_end(lexer);
+                    return true;
+                } else {
+                    *fail = ch;
+                }
+            }
+
             if (markup_no_follow[type][lexer->lookahead]) {
                 LOG("failed to scan '%c' markup start. lookahead '%c' cannot follow", ch, lexer->lookahead);
                 *fail = ch;
@@ -356,10 +376,6 @@ bool tree_sitter_orgmode_external_scanner_scan(
 ) {
     Scanner *s = (Scanner*) payload;
 
-    if (lexer->lookahead == '\n') {
-        array_clear(&s->markup_stack);
-    }
-
     if (valid_symbols[ERROR_SENTINEL]) {
         LOG("!!! error");
         return false;
@@ -379,10 +395,24 @@ bool tree_sitter_orgmode_external_scanner_scan(
 
     LOG("********");
     LOG("indent: %d; in_drawer: %c; lookahead: '%c'", indent, in_drawer, lexer->lookahead);
+    LOG("%d items in markup stack", s->markup_stack.size);
+    for (int i = 0; i < s->markup_stack.size; i++) {
+        const enum TokenType ty = s->markup_stack.contents[i];
+        LOG(" %d) '%c'", i, markup_chars[ty]);
+    }
 
     #define TOK(id) if (valid_symbols[id]) { LOG("EXPECTING TOKEN: " #id); }
     TOKEN_TYPES
     #undef TOK
+
+    if (valid_symbols[NEWLINE] && lexer->lookahead == '\n') {
+        LOG("clearing markup stack, at end of line");
+        array_clear(&s->markup_stack);
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        lexer->result_symbol = NEWLINE;
+        return true;
+    }
 
     if (!fail && valid_symbols[END_SECTION] && lexer->eof(lexer)) {
         lexer->result_symbol = END_SECTION;
@@ -422,22 +452,6 @@ bool tree_sitter_orgmode_external_scanner_scan(
         LOG("got pathreg, len: %d", n);
         lexer->mark_end(lexer);
         lexer->result_symbol = PATHREG;
-        return true;
-    }
-
-    if (!fail && valid_symbols[STARS] && lexer->get_column(lexer) == 0 && lexer->lookahead == '*') {
-        return scan_stars(s, lexer, valid_symbols, 0);
-    }
-
-    if (fail == '*' && valid_symbols[STARS] && lexer->get_column(lexer) == 1) {
-        return scan_stars(s, lexer, valid_symbols, 1);
-    }
-
-    if (scan_markup_end(s, lexer, valid_symbols, &fail)) {
-        return true;
-    }
-
-    if (scan_markup_start(s, lexer, valid_symbols, &fail)) {
         return true;
     }
 
@@ -664,6 +678,24 @@ bool tree_sitter_orgmode_external_scanner_scan(
                 return true;
             }
         }
+
+        LOG("... no bullet found");
+    }
+
+    if (scan_markup_end(s, lexer, valid_symbols, &fail)) {
+        return true;
+    }
+
+    if (scan_markup_start(s, lexer, valid_symbols, &fail)) {
+        return true;
+    }
+
+    if (!fail && valid_symbols[STARS] && lexer->get_column(lexer) == 0 && lexer->lookahead == '*') {
+        return scan_stars(s, lexer, valid_symbols, 0);
+    }
+
+    if (fail == '*' && valid_symbols[STARS] && lexer->get_column(lexer) == 1) {
+        return scan_stars(s, lexer, valid_symbols, 1);
     }
 
     // can do this even if failed earlier. use the failed character

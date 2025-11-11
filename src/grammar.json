@@ -514,12 +514,8 @@
             "type": "CHOICE",
             "members": [
               {
-                "type": "FIELD",
-                "name": "checkbox",
-                "content": {
-                  "type": "SYMBOL",
-                  "name": "checkbox"
-                }
+                "type": "SYMBOL",
+                "name": "checkbox"
               },
               {
                 "type": "BLANK"
@@ -544,23 +540,6 @@
           }
         ]
       }
-    },
-    "checkbox": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "[ ]"
-        },
-        {
-          "type": "STRING",
-          "value": "[-]"
-        },
-        {
-          "type": "STRING",
-          "value": "[X]"
-        }
-      ]
     },
     "paragraph": {
       "type": "PREC_RIGHT",
@@ -933,10 +912,6 @@
       "type": "PATTERN",
       "value": "\\r?\\n[ \\t]*"
     },
-    "_nl": {
-      "type": "PATTERN",
-      "value": "\\r?\\n"
-    },
     "_space": {
       "type": "PATTERN",
       "value": "[ \\t]+"
@@ -998,6 +973,10 @@
     {
       "type": "SYMBOL",
       "name": "bullet"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "checkbox"
     },
     {
       "type": "SYMBOL",
@@ -1074,6 +1053,10 @@
     {
       "type": "SYMBOL",
       "name": "comment_line"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_nl"
     },
     {
       "type": "SYMBOL",

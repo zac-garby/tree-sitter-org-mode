@@ -76,11 +76,6 @@
     }
   },
   {
-    "type": "checkbox",
-    "named": true,
-    "fields": {}
-  },
-  {
     "type": "code_inline",
     "named": true,
     "fields": {},
@@ -380,16 +375,6 @@
     "type": "list_item",
     "named": true,
     "fields": {
-      "checkbox": {
-        "multiple": false,
-        "required": false,
-        "types": [
-          {
-            "type": "checkbox",
-            "named": true
-          }
-        ]
-      },
       "content": {
         "multiple": false,
         "required": false,
@@ -402,11 +387,15 @@
       }
     },
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": true,
       "types": [
         {
           "type": "bullet",
+          "named": true
+        },
+        {
+          "type": "checkbox",
           "named": true
         }
       ]
@@ -657,18 +646,6 @@
     "named": false
   },
   {
-    "type": "[ ]",
-    "named": false
-  },
-  {
-    "type": "[-]",
-    "named": false
-  },
-  {
-    "type": "[X]",
-    "named": false
-  },
-  {
     "type": "block_begin_name",
     "named": true
   },
@@ -678,6 +655,10 @@
   },
   {
     "type": "bullet",
+    "named": true
+  },
+  {
+    "type": "checkbox",
     "named": true
   },
   {

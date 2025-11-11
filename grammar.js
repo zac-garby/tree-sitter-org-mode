@@ -26,6 +26,7 @@ export default grammar({
     $.stars,
     $._end_section,
     $.bullet,
+    $.checkbox,
     $._list_start,
     $._list_end,
     $._bold_start,
@@ -45,6 +46,7 @@ export default grammar({
     $.word,
     $.pathreg,
     $.comment_line,
+    $._nl,
     $.error_sentinel,
   ],
 
@@ -151,11 +153,9 @@ export default grammar({
 
     list_item: $ => prec(1, seq(
       $.bullet,
-      optional(field("checkbox", $.checkbox)),
+      optional($.checkbox),
       field("content", alias(repeat($.element), "content")),
     )),
-
-    checkbox: $ => choice("[ ]", "[-]", "[X]"),
 
     paragraph: $ => prec.right(0, seq(
       repeat1($._object),
@@ -220,7 +220,6 @@ export default grammar({
     strikethrough: $ => seq($._strikethrough_start, repeat1($._object), $._strikethrough_end),
 
     _blank_line: $ => /\r?\n[ \t]*/,
-    _nl: $ => /\r?\n/,
     _space: $ => /[ \t]+/,
     value: $ => /[^\n]+/,
   }
